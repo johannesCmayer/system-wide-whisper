@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+
+from pynput.keyboard import Key, Controller
+import asyncio
+import soundfile as sf
+import pyaudio
+import wave
+import os
+import tempfile
+import signal
+import requests
+import subprocess
+import pyperclip
+from pathlib import Path
+import argparse
+from desktop_notifier import DesktopNotifier
+import time
+import sys
+
+whisper_server_url = 'http://fritz.local:9000'
+
+project_path = Path(os.path.dirname(__file__)).absolute()
+
+ipc_dir = project_path / 'IPC'
+stop_file = ipc_dir / 'stop'
+pause_file = ipc_dir / 'pause'
+running_file = ipc_dir / 'running'
+
+icon_dir = project_path / 'icons'
+record_icon = icon_dir / 'record_icon.png'
+pause_icon = icon_dir / 'pause_icon.png'
+processing_icon = icon_dir / 'processing_icon.png'
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--start', action='store_true')
+parser.add_argument('--stop', action='store_true')
+parser.add_argument('--toggle-recording', action='store_true')
+parser.add_argument('--toggle-pause', action='store_true')
+args = parser.parse_args()
+
+notifier = DesktopNotifier()
+shutdown_program = False
+paused = False
+
+async def signal_handler(sig, frame):
+    global shutdown_program
+    shutdown_program = True
+    exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+
+async def server():
+    stop_file.unlink(missing_ok=True)
+    p = pyaudio.PyAudio()  # Create an interface to PortAudio
+
+    print('Recording')
+    n1 = await notifier.send(title="Recording for Whisper", message="", attachment=record_icon)
+
+    chunk = 1024  # Record in chunks of 1024 samples
+    sample_format = pyaudio.paInt16  # 16 bits per sample
+    channels = 1
+    fs = 44100  # Record at 44100 samples per second
+    stream = p.open(format=sample_format,
+                    channels=channels,
+                    rate=fs,
+                    frames_per_buffer=chunk,
+                    input=True)
+
+    frames = []  # Initialize array to store frames
+
+    # Store data in chunks for 3 seconds
+    global paused
+    global stop_recording
+    n_pause = None
+    while True:
+        data = stream.read(chunk)
+        if not pause_file.exists():
+            frames.append(data)
+            if n_pause:
+                await notifier.clear(n_pause)
+                n_pause = None
+        else:
+            if not n_pause:
+                n_pause = await notifier.send(title="Paused Recording", message="", attachment=pause_icon)
+        if shutdown_program or stop_file.exists():
+            stop_file.unlink(missing_ok=True)
+            break
+    if n_pause:
+        await notifier.clear(n_pause)
+
+    # Stop and close the stream 
+    stream.stop_stream()
+    stream.close()
+    # Terminate the PortAudio interface
+
+    print('Finished recording')
+    n2 = await notifier.send(title="Processing", message="", attachment=processing_icon)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        wav_path = f"{tmp_dir}/temp.wav"
+        mp3_path = f"{tmp_dir}/temp.mp3"
+
+        print('saving wav')
+        wf = wave.open(wav_path, 'wb')
+        wf.setnchannels(channels)
+        wf.setsampwidth(p.get_sample_size(sample_format))
+        wf.setframerate(fs)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+
+        print('saving mp3')
+        data, fs = sf.read(wav_path) 
+        sf.write(mp3_path, data, fs)
+
+        # with open(mp3_path, 'rb') as f:
+        #     data_mp3 = f.read()
+        # 
+        # params = {'task':'transcribe'}
+        # send_data = {'audio_file': open(mp3_path, 'rb')}
+        # send_data = {'audio_file': '@2023_03_27_19_17_19.mp3;type=audio/mpeg'}
+        # x = requests.post(url, json=params, data = send_data)
+        # print(x.text)
+
+        out = subprocess.check_output(["curl", "-X", 'POST', f'{whisper_server_url}/asr?task=transcribe&output=txt', '-H' 'accept: application/json', '-H' 'Content-Type: multipart/form-data', '-F', f'audio_file=@{mp3_path};type=audio/mpeg'])
+        out = out.decode('utf-8')
+        out = out.strip()
+        out = out.replace('\n', ' ')
+        out = out + ' '
+        print(out)
+
+        with open(os.path.expanduser("~/.whisper_transcriptions"), 'a') as f:
+            f.write('====================================\n')
+            f.write(out)
+            f.write('\n')
+
+        # Use the system clipboard to paste the transcribed text. Assumes default keyboard shortcut for pasting text.
+        keyboard = Controller()
+        orig_clipboard = pyperclip.paste()
+        pyperclip.copy(out)
+        with keyboard.pressed(Key.cmd if sys.platform == "darwin" else Key.ctrl):
+            keyboard.press('v')
+        time.sleep(0.1)
+        pyperclip.copy(orig_clipboard)
+
+        await notifier.clear(n1)
+        await notifier.clear(n2)
+    p.terminate()
+
+async def main():
+    if args.start:
+        running_file.touch()
+        await server()
+    if args.stop:
+        stop_file.touch()
+        running_file.unlink()
+        exit(0)
+    if args.toggle_recording:
+        if not running_file.exists():
+            running_file.touch()
+            await server()
+        else:
+            stop_file.touch()
+            running_file.unlink()
+            exit(0)
+
+    if args.toggle_pause:
+        if pause_file.exists():
+            pause_file.unlink()
+        else:
+            pause_file.touch()
+        exit(0)
+
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        raise e
