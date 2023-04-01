@@ -16,6 +16,7 @@ import argparse
 from desktop_notifier import DesktopNotifier
 import time
 import sys
+import re
 
 whisper_server_url = 'http://fritz.local:9000'
 
@@ -36,11 +37,63 @@ parser.add_argument('--start', action='store_true')
 parser.add_argument('--stop', action='store_true')
 parser.add_argument('--toggle-recording', action='store_true')
 parser.add_argument('--toggle-pause', action='store_true')
+parser.add_argument('--clear-notifications', action='store_true')
+parser.add_argument('--no-postprocessing', action='store_true')
 args = parser.parse_args()
 
 notifier = DesktopNotifier()
 shutdown_program = False
 paused = False
+
+def post_process(s):
+    command_prefixes = ['x', 'command']
+    commands = [
+        (['new', 'line'], '\n'),
+        (['new', 'paragraph'], '\n\n'),
+        (['open', 'parentheses'], ' ('),
+        (['close', 'parentheses'], ') '),
+        (['open', 'parenthesis'], ' ('),
+        (['close', 'parenthesis'], ') '),
+        (['open', 'bracket'], ' ['),
+        (['close', 'bracket'], '] '),
+        (['open', 'curly', 'brace'], ' {'),
+        (['close', 'curly', 'brace'], '} '),
+        (['full', 'stop'], '. '),
+        (['period'], '. '),
+        (['exclamation', 'mark'], '! '),
+        (['comma'], ', '),
+        (['semicolon'], '; '),
+        (['Question', 'mark'], '? '),
+    ]
+
+    commands_1 = []
+    for p,r in commands:
+        commands_1.append((''.join(p), r))
+        commands_1.append((' '.join(p), r))
+    commands_2 = []
+    for p,r in commands_1:
+        commands_2.append((f'{p}. ', r))
+        commands_2.append((f'{p}, ', r))
+        commands_2.append((f'{p}.', r))
+        commands_2.append((f'{p},', r))
+        commands_2.append((p, r))
+    commands_3 = []
+    for p,r in commands_2:
+        for prefix in command_prefixes:
+            commands_3.append((f'{prefix}. {p}', r))
+            commands_3.append((f'{prefix}, {p}', r))
+            commands_3.append((f'{prefix} {p}', r))
+            commands_3.append((f'{prefix}{p}', r))
+            commands_3.append((f'{p}', r))
+    commands_4 = []
+    for p,r in commands_3:
+        commands_4.append((f' {p}', r))
+        commands_4.append((f'{p}', r))
+
+    print(commands_4)
+    for p,r in commands_4:
+        s = re.sub(p, r, s, flags=re.IGNORECASE)
+    return s
 
 async def record():
     stop_file.unlink(missing_ok=True)
@@ -120,6 +173,8 @@ async def record():
         out = out.strip()
         out = out.replace('\n', ' ')
         out = out + ' '
+        if not args.no_postprocessing:
+            out = post_process(out)
         print(out)
 
         with open(os.path.expanduser("~/.whisper_transcriptions"), 'a') as f:
@@ -141,7 +196,10 @@ async def record():
     p.terminate()
 
 async def main():
-    if args.start:
+    if args.clear_notifications:
+        await notifier.clear_all()
+        exit(0)
+    elif args.start:
         running_file.touch()
         await record()
     elif args.stop:
