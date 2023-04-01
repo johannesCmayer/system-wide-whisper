@@ -42,15 +42,9 @@ notifier = DesktopNotifier()
 shutdown_program = False
 paused = False
 
-async def signal_handler(sig, frame):
-    global shutdown_program
-    shutdown_program = True
-    exit(0)
-
-signal.signal(signal.SIGINT, signal_handler)
-
-async def server():
+async def record():
     stop_file.unlink(missing_ok=True)
+    pause_file.unlink(missing_ok=True)
     p = pyaudio.PyAudio()  # Create an interface to PortAudio
 
     print('Recording')
@@ -94,8 +88,8 @@ async def server():
     # Terminate the PortAudio interface
 
     print('Finished recording')
-    n2 = await notifier.send(title="Processing", message="", attachment=processing_icon)
 
+    n2 = await notifier.send(title="Processing", message="", attachment=processing_icon)
     with tempfile.TemporaryDirectory() as tmp_dir:
         wav_path = f"{tmp_dir}/temp.wav"
         mp3_path = f"{tmp_dir}/temp.mp3"
@@ -134,9 +128,9 @@ async def server():
             f.write('\n')
 
         # Use the system clipboard to paste the transcribed text. Assumes default keyboard shortcut for pasting text.
-        keyboard = Controller()
         orig_clipboard = pyperclip.paste()
         pyperclip.copy(out)
+        keyboard = Controller()
         with keyboard.pressed(Key.cmd if sys.platform == "darwin" else Key.ctrl):
             keyboard.press('v')
         time.sleep(0.1)
@@ -149,26 +143,23 @@ async def server():
 async def main():
     if args.start:
         running_file.touch()
-        await server()
-    if args.stop:
+        await record()
+    elif args.stop:
         stop_file.touch()
         running_file.unlink()
-        exit(0)
-    if args.toggle_recording:
+    elif args.toggle_recording:
         if not running_file.exists():
             running_file.touch()
-            await server()
+            await record()
         else:
             stop_file.touch()
             running_file.unlink()
-            exit(0)
-
-    if args.toggle_pause:
+    elif args.toggle_pause:
         if pause_file.exists():
             pause_file.unlink()
         else:
             pause_file.touch()
-        exit(0)
+    exit(0)
 
 
 if __name__ == '__main__':
