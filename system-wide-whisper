@@ -64,6 +64,12 @@ def post_process(s):
         (['comma'], ', '),
         (['semicolon'], '; '),
         (['Question', 'mark'], '? '),
+        (['hyphen'], '-'),
+        (['dash'], '-'),
+        (['next', 'bullet'], '\n- '),
+        (['next', 'bullet', 'point'], '\n- '),
+        (['next', 'numbered', 'bullet'], '\n1. '),
+        (['next', 'numbered', 'bullet', 'point'], '\n1. '),
     ]
 
     commands_1 = []
