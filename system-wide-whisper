@@ -39,14 +39,25 @@ parser.add_argument('--toggle-recording', action='store_true')
 parser.add_argument('--toggle-pause', action='store_true')
 parser.add_argument('--clear-notifications', action='store_true')
 parser.add_argument('--no-postprocessing', action='store_true')
+parser.add_argument('--start-lowercase', action='store_true')
 args = parser.parse_args()
 
 notifier = DesktopNotifier()
 shutdown_program = False
 paused = False
 
+def clipboard_paste(s):
+    orig_clipboard = pyperclip.paste()
+    pyperclip.copy(s)
+    keyboard = Controller()
+    with keyboard.pressed(Key.cmd if sys.platform == "darwin" else Key.ctrl):
+        keyboard.press('v')
+    time.sleep(0.1)
+    pyperclip.copy(orig_clipboard)
+
 def post_process(s):
     command_prefixes = ['x', 'command']
+    escape_prefix = ['escape']
     commands = [
         (['new', 'line'], '\n'),
         (['new', 'paragraph'], '\n\n'),
@@ -84,7 +95,16 @@ def post_process(s):
         commands_2.append((f'{p},', r))
         commands_2.append((p, r))
     commands_3 = []
-    for p,r in commands_2:
+    escape_reverse_map = []
+    for (p,r),(p2,r2) in zip(commands_2, commands):
+        for prefix in escape_prefix:
+            for x in [
+                    f'{prefix}. {p}', 
+                    f'{prefix}, {p}',
+                    f'{prefix} {p}',
+                    f'{prefix}{p}']:
+                commands_3.append((x, str(hash(x))))
+                escape_reverse_map.append((str(hash(x)), re.sub(prefix, '', x)))
         for prefix in command_prefixes:
             commands_3.append((f'{prefix}. {p}', r))
             commands_3.append((f'{prefix}, {p}', r))
@@ -99,6 +119,9 @@ def post_process(s):
     print(commands_4)
     for p,r in commands_4:
         s = re.sub(p, r, s, flags=re.IGNORECASE)
+    for p,r in escape_reverse_map:
+        s = re.sub(p, r, s)
+    s = re.sub("\\'", "'", s)
     return s
 
 async def record():
@@ -179,23 +202,24 @@ async def record():
         out = out.strip()
         out = out.replace('\n', ' ')
         out = out + ' '
+        out_2 = out
         if not args.no_postprocessing:
-            out = post_process(out)
-        print(out)
+            out_2 = post_process(out)
+        if args.start_lowercase:
+            if len(out_2) >= 2:
+                out_2 = out_2[0].lower() + out_2[1:]
+            elif len(out_2) == 1:
+                out_2 = out_2[0].lower()
+        print(out_2)
 
         with open(os.path.expanduser("~/.whisper_transcriptions"), 'a') as f:
             f.write('====================================\n')
-            f.write(out)
+            f.write(out_2)
             f.write('\n')
 
         # Use the system clipboard to paste the transcribed text. Assumes default keyboard shortcut for pasting text.
-        orig_clipboard = pyperclip.paste()
-        pyperclip.copy(out)
-        keyboard = Controller()
-        with keyboard.pressed(Key.cmd if sys.platform == "darwin" else Key.ctrl):
-            keyboard.press('v')
-        time.sleep(0.1)
-        pyperclip.copy(orig_clipboard)
+        clipboard_paste(out)
+        clipboard_paste(out_2)
 
         await notifier.clear(n1)
         await notifier.clear(n2)
