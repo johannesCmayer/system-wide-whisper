@@ -1,0 +1,5 @@
+cmd + ctrl + ralt + shift - e : /Users/johannes/bin/ww --toggle-pause
+rcmd + ctrl + ralt + shift - u : /Users/johannes/bin/ww --toggle-recording
+cmd + ctrl + ralt + shift - u : /Users/johannes/bin/ww --toggle-recording --start-lowercase
+rcmd + ctrl + alt + shift - u : /Users/johannes/bin/ww --toggle-recording --no-postprocessing
+rcmd + ctrl + alt + shift - e : /Users/johannes/bin/ww --abort
