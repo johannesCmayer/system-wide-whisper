@@ -137,7 +137,9 @@ def post_process(s):
         (['plus', 'sign'], '+'),
         (['equals', 'sign'], '='),
         (['hash', 'sign'], '#'),
-        (['horizontal', 'line'], '\n\n---\n\n'),
+        (['new', 'horizontal', 'line'], '\n\n---\n\n'),
+        (['new', 'to', 'do'], ' #TODO '),
+        (['new', 'to-do'], ' #TODO '),
     ]
 
     for i,e in enumerate(['one', 'two', 'three', 'four', 'five', 'six']):
