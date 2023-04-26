@@ -55,6 +55,7 @@ parser.add_argument('--start-lowercase', action='store_true', help="The first ch
 parser.add_argument('--copy-last', action='store_true', help="Copy the last transcription to the clipboard.")
 parser.add_argument('--list-transcriptions', action='store_true', help="List all past transcriptions.")
 parser.add_argument('--transcribe-last', action='store_true', help="Transcribe the last recording.")
+parser.add_argument('--config', action='store_true', help="Edit the config file.")
 args = parser.parse_args()
 
 notifier = DesktopNotifier()
@@ -136,7 +137,12 @@ def post_process(s):
         (['plus', 'sign'], '+'),
         (['equals', 'sign'], '='),
         (['hash', 'sign'], '#'),
+        (['horizontal', 'line'], '\n\n---\n\n'),
     ]
+
+    for i,e in enumerate(['one', 'two', 'three', 'four', 'five', 'six']):
+        commands.append((['new', 'heading', e], f'\n\n'+ ("#" * (i)) + ' '))
+        commands.append((['new', 'heading', str(i)], f'\n\n'+ ("#" * (i)) + ' '))
 
     commands_help = "\n".join([' '.join(c) + ": '" + re.sub('\n', '⏎', t) + "'" for c,t in commands])
     if s.lower().strip().replace(' ', '').replace(',', '').replace('.', '') == ''.join(['command', 'print', 'help']):
@@ -179,13 +185,15 @@ def transcribe(mp3_path):
     setup_api_key()
     manager = multiprocessing.Manager()
     qeu = manager.dict()
-    p1 = subprocess.Popen(["curl", "-X", 'POST', f"{config['local_server_url']}/asr?task=transcribe&output=txt", '-H', 'accept: application/json', '-H', 'Content-Type: multipart/form-data', '-F', f'audio_file=@{mp3_path};type=audio/mpeg'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    local_start_time = time.time()
+    p1 = None
+    if config['use_local_server']:
+        p1 = subprocess.Popen(["curl", "-X", 'POST', f"{config['local_server_url']}/asr?task=transcribe&output=txt", '-H', 'accept: application/json', '-H', 'Content-Type: multipart/form-data', '-F', f'audio_file=@{mp3_path};type=audio/mpeg'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        local_start_time = time.time()
     p2 = multiprocessing.Process(target=openai_transcibe, args=(mp3_path, qeu,))
     p2.start()
     openAI_start_time = time.time()
     while True:
-        if p1 and p1.poll() is not None:
+        if config['use_local_server'] and p1 and p1.poll() is not None:
             out, err = p1.communicate()
             if re.search("Could not resolve host", err.decode('utf-8')):
                 p1 = None
@@ -329,6 +337,8 @@ def trim_audio_files():
 async def argument_branching():
     if args.abort:
         abort_signal_file.touch()
+    elif args.config:
+        os.system(f'vi {project_path/"config.yaml"}')
     elif args.copy_last:
         with transcription_file.open() as f:
             lines = f.readlines()

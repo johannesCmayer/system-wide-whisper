@@ -1,3 +1,4 @@
 input_language: en
 model: whisper-1
+use_local_server: false
 local_server_url: http://fritz.local:9000
