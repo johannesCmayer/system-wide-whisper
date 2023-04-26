@@ -41,6 +41,10 @@ pause_icon = icon_dir / 'pause_icon.png'
 processing_icon = icon_dir / 'processing_icon.png'
 error_icon = icon_dir / 'error_icon.png'
 
+logs_dir.mkdir(exist_ok=True)
+audio_path.mkdir(exist_ok=True)
+ipc_dir.mkdir(exist_ok=True)
+
 config = yaml.load((project_path / 'config.yaml').open(), yaml.FullLoader)
 
 parser = argparse.ArgumentParser()
