@@ -129,7 +129,7 @@ def post_process(s):
         (['tilde'], '~'),
         (['pipe'], '|'),
         (['forward', 'slash'], '/'),
-        (['colon'], ':'),
+        (['colon'], ': '),
         (['double', 'quote'], '"'),
         (['single', 'quote'], "'"),
         (['less', 'than', 'sign'], '<'),
@@ -233,6 +233,8 @@ def process_transcription(text):
     text = re.sub("\\'", "'", text)
     text += ' '
     text = re.sub("[Tt]hank [Yy]ou\.?$", "", text)
+    text = re.sub(". \)", ".\)", text)
+    text = re.sub("[,.!?]:", ":", text)
     return text
 
 async def record():
