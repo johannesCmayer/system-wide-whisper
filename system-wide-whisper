@@ -55,6 +55,8 @@ parser.add_argument('--start-lowercase', action='store_true', help="The first ch
 parser.add_argument('--copy-last', action='store_true', help="Copy the last transcription to the clipboard.")
 parser.add_argument('--list-transcriptions', action='store_true', help="List all past transcriptions.")
 parser.add_argument('--transcribe-last', action='store_true', help="Transcribe the last recording.")
+parser.add_argument('--only-record', action='store_true', help="Only record, don't transcribe.")
+parser.add_argument('--clipboard', action='store_true', help="Don't paste, only copy to clipboard.")
 parser.add_argument('--config', action='store_true', help="Edit the config file.")
 args = parser.parse_args()
 
@@ -84,6 +86,9 @@ def setup_api_key():
 setup_api_key()
 
 def paste_text(text):
+    if args.clipboard:
+        pyperclip.copy(text)
+        return
     orig_clipboard = pyperclip.paste()
     pyperclip.copy(text)
     keyboard = Controller()
@@ -311,6 +316,7 @@ async def record():
         sf.write(mp3_path, data, fs)
 
     await notifier.clear(n1)
+    print(mp3_path)
     return mp3_path
 
 async def transcribe_2(mp3_path):
@@ -341,6 +347,8 @@ def trim_audio_files():
 async def argument_branching():
     if args.abort:
         abort_signal_file.touch()
+    elif args.only_record:
+        mp3_path = await record()
     elif args.config:
         os.system(f'vi {project_path/"config.yaml"}')
     elif args.copy_last:
