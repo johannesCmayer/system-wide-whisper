@@ -8,6 +8,7 @@ import argparse
 import time
 import sys
 import re
+import atexit
 
 import openai
 import yaml
@@ -21,6 +22,7 @@ import wave
 import multiprocessing
 from datetime import datetime
 
+instance_id = datetime.now().strftime("%Y%m%d%H%M%S")
 project_path = Path(os.path.dirname(__file__)).absolute()
 
 logs_dir = project_path / 'logs'
@@ -40,6 +42,9 @@ record_icon = icon_dir / 'record_icon.png'
 pause_icon = icon_dir / 'pause_icon.png'
 processing_icon = icon_dir / 'processing_icon.png'
 error_icon = icon_dir / 'error_icon.png'
+
+lock_path = project_path / 'locks'
+instance_lock_path = lock_path / instance_id
 
 logs_dir.mkdir(exist_ok=True)
 audio_path.mkdir(exist_ok=True)
@@ -241,7 +246,7 @@ def process_transcription(text):
             text = text[0].lower()
     text = re.sub("\\'", "'", text)
     text += ' '
-    text = re.sub("[Tt]hank [Yy]ou\.?$", "", text)
+    text = re.sub("[Tt]hank [Yy]ou\. ?$", "", text)
     text = re.sub(". \)", ".\)", text)
     text = re.sub("[,.!?]:", ":", text)
     return text
@@ -337,9 +342,21 @@ async def transcribe_2(mp3_path):
     await notifier.clear(n2)
     return out
 
+def aquire_lock():
+    locks = list(lock_path.iterdir())
+    instance_lock_path.touch()
+
+    while len(locks) > 0:
+        current_locks = list(lock_path.iterdir())
+        for l in locks:
+            if l not in current_locks:
+                locks.remove(l)
+        time.sleep(0.1)
+
 async def asr_pipeline():
     mp3_path = await record()
     text = await transcribe_2(mp3_path)
+    aquire_lock()
     paste_text(text)
 
 def trim_audio_files():
@@ -401,7 +418,11 @@ async def async_wrapper():
         f_print(str(e))
         raise e
 
+def cleanup():
+    instance_lock_path.unlink(missing_ok=True)
+
 if __name__ == '__main__':
+    atexit.register(cleanup)
     try:
         asyncio.run(async_wrapper())
     except Exception as e:
