@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/opt/homebrew/bin/python3
 
 import os
 import tempfile
@@ -267,7 +267,7 @@ async def record():
     stream = p.open(format=sample_format,
                     channels=channels,
                     rate=fs,
-                    frames_per_buffer=chunk,
+                    frames_per_buffer=chunk, 
                     input=True)
 
     frames = []  # Initialize array to store frames
