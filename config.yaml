@@ -4,5 +4,6 @@ use_local_server: false
 local_server_url: http://fritz.local:9000
 
 # How long to wait for the pasting of text to complete before
-# restoring the original clipboard state.
-paste_wait: 0.5
+# restoring the original clipboard state. Only used for pyperclip,
+# i.e. on macOS and Windows.
+paste_wait: 0.1

@@ -92,10 +92,13 @@ def setup_api_key():
 
 setup_api_key()
 
-def paste_text(text):
-    if args.clipboard:
-        pyperclip.copy(text)
-        return
+def X_paste_text(text):
+    clipboard_contents = subprocess.check_output(["xclip", "-selection", "clipboard", "-out"])
+    subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode())
+    subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'])
+    subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents)
+
+def pyperclip_paste_text(text):
     orig_clipboard = pyperclip.paste()
     pyperclip.copy(text)
     keyboard = Controller()
@@ -104,6 +107,14 @@ def paste_text(text):
     time.sleep(config['paste_wait'])
     if orig_clipboard:
         pyperclip.copy(orig_clipboard)
+
+def paste_text(text):
+    if args.clipboard:
+        pyperclip.copy(text)
+    elif sys.platform == 'linux':
+        X_paste_text(text)
+    else:
+        pyperclip_paste_text(text)
                 
 def post_process(s):
     command_prefixes = ['x', 'command']
