@@ -2,3 +2,7 @@ input_language: null
 model: whisper-1
 use_local_server: false
 local_server_url: http://fritz.local:9000
+
+# How long to wait for the pasting of text to complete before
+# restoring the original clipboard state.
+paste_wait: 0.5

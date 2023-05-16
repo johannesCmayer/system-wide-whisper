@@ -101,7 +101,7 @@ def paste_text(text):
     keyboard = Controller()
     with keyboard.pressed(Key.cmd if sys.platform == "darwin" else Key.ctrl):
         keyboard.press('v')
-    time.sleep(0.1)
+    time.sleep(config['paste_wait'])
     if orig_clipboard:
         pyperclip.copy(orig_clipboard)
                 
