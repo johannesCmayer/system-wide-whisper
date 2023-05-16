@@ -1,5 +1,3 @@
-#!/opt/homebrew/bin/python3
-
 import os
 import tempfile
 import subprocess
@@ -12,7 +10,7 @@ import atexit
 
 import openai
 import yaml
-from desktop_notifier import DesktopNotifier
+from desktop_notifier import DesktopNotifier, Urgency
 import pyperclip
 from pynput.keyboard import Key, Controller
 import asyncio
@@ -258,7 +256,7 @@ async def record():
     p = pyaudio.PyAudio()  # Create an interface to PortAudio
 
     f_print('Recording')
-    n1 = await notifier.send(title="Recording for Whisper", message="", attachment=record_icon)
+    n1 = await notifier.send(title="Recording for Whisper", urgency=Urgency.Critical, message="", attachment=record_icon)
 
     chunk = 1024  # Record in chunks of 1024 samples
     sample_format = pyaudio.paInt16  # 16 bits per sample
@@ -295,7 +293,7 @@ async def record():
                 n_pause = None
         else:
             if not n_pause:
-                n_pause = await notifier.send(title="Paused Recording", message="", attachment=pause_icon)
+                n_pause = await notifier.send(title="Paused Recording", urgency=Urgency.Critical, message="", attachment=pause_icon)
         if shutdown_program or stop_signal_file.exists():
             stop_signal_file.unlink(missing_ok=True)
             break
@@ -329,7 +327,7 @@ async def record():
     return mp3_path
 
 async def transcribe_2(mp3_path):
-    n2 = await notifier.send(title="Processing", message="", attachment=processing_icon)
+    n2 = await notifier.send(title="Processing", urgency=Urgency.Critical, message="", attachment=processing_icon)
     out = transcribe(mp3_path)
     out = process_transcription(out)
     f_print("transcription:", out)
@@ -414,7 +412,7 @@ async def async_wrapper():
         await argument_branching()
     except Exception as e:
         await notifier.clear_all()
-        await notifier.send(title="Error", message=str(e), attachment=error_icon)
+        await notifier.send(title="Error", urgency=Urgency.Critical, message=str(e), attachment=error_icon)
         f_print(str(e))
         raise e
 
