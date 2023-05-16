@@ -3,6 +3,12 @@ Use whisper anywhere on your system to enter text. Requires the [whisper-asr-web
 
 I am using [skhd](https://github.com/koekeishiya/skhd) for the keyboard shortcuts. Though you can use anything that can execute a program with a keyboard shortcut.
 
+## Non-python requirements for Linux
+- xdotool
+- xclip
+
+Pasting only works if you are using X (on Linux).
+
 ```
 usage: system-wide-whisper [-h] [--start] [--stop] [--toggle-recording]
                            [--toggle-pause] [--abort] [--clear-notifications]
