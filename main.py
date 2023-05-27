@@ -7,6 +7,9 @@ import time
 import sys
 import re
 import atexit
+import wave
+import multiprocessing
+from datetime import datetime
 
 import openai
 import yaml
@@ -16,9 +19,6 @@ from pynput.keyboard import Key, Controller
 import asyncio
 import soundfile as sf
 import pyaudio
-import wave
-import multiprocessing
-from datetime import datetime
 
 instance_id = datetime.now().strftime("%Y%m%d%H%M%S")
 project_path = Path(os.path.dirname(__file__)).absolute()
@@ -45,6 +45,7 @@ lock_path = project_path / 'locks'
 instance_lock_path = lock_path / instance_id
 
 logs_dir.mkdir(exist_ok=True)
+lock_path.mkdir(exist_ok=True)
 audio_path.mkdir(exist_ok=True)
 ipc_dir.mkdir(exist_ok=True)
 
@@ -73,6 +74,7 @@ shutdown_program = False
 def f_print(s, end='\n'):
     print(s, end=end)
     with open(logs_dir / 'debug.log', 'a') as f:
+
         f.write(s + end)
 
 def setup_api_key():
@@ -111,8 +113,8 @@ def pyperclip_paste_text(text):
 def paste_text(text):
     if args.clipboard:
         pyperclip.copy(text)
-    elif sys.platform == 'linux':
-        X_paste_text(text)
+    #elif sys.platform == 'linux':
+    #    X_paste_text(text)
     else:
         pyperclip_paste_text(text)
                 

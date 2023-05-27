@@ -1,0 +1,9 @@
+openai
+pyyaml
+desktop_notifier
+pyperclip
+pynput
+asyncio
+soundfile
+pyaudio
+numpy
