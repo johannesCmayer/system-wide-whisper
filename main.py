@@ -92,13 +92,31 @@ def setup_api_key():
             exit(1)
     openai.api_key = openai_api_key
 
+# Somehow this does not work if not called here (if called in the main function this breaks)
 setup_api_key()
 
+def X_get_clipboard():
+    result = subprocess.run(["xclip", "-selection", "clipboard", "-out"], 
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    # The following handles the case when the clipboard is empty
+    if result.returncode == 1 and result.stderr == "Error: target STRING not available":
+        return ""
+    else:
+        return result.stdout
+
 def X_paste_text(text):
-    clipboard_contents = subprocess.check_output(["xclip", "-selection", "clipboard", "-out"])
-    subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode())
-    subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'])
-    subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents)
+    clipboard_contents = X_get_clipboard()
+    #subprocess.run(['xdotool', 'type', text])
+    program = subprocess.check_output(["ps -e | grep $(xdotool getwindowpid $(xdotool getwindowfocus)) | grep -v grep | awk '{print $4}'"], shell=True).decode().strip()
+    subprocess.run(['xclip', '-selection', 'primary'], input=text.encode())
+    print('program is: ' + program)
+    if program == 'emacs':
+        subprocess.run(['xclip', '-selection', 'clipboard'], input=(text+" ").encode())
+        subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'P'])
+    else:
+        subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode())
+        subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'])
+    subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents.encode())
 
 def pyperclip_paste_text(text):
     orig_clipboard = pyperclip.paste()
@@ -113,8 +131,8 @@ def pyperclip_paste_text(text):
 def paste_text(text):
     if args.clipboard:
         pyperclip.copy(text)
-    #elif sys.platform == 'linux':
-    #    X_paste_text(text)
+    elif sys.platform == 'linux':
+        X_paste_text(text)
     else:
         pyperclip_paste_text(text)
                 
