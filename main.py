@@ -110,9 +110,13 @@ def X_paste_text(text):
     program = subprocess.check_output(["ps -e | grep $(xdotool getwindowpid $(xdotool getwindowfocus)) | grep -v grep | awk '{print $4}'"], shell=True).decode().strip()
     subprocess.run(['xclip', '-selection', 'primary'], input=text.encode())
     print('program is: ' + program)
-    if program == 'emacs':
+    if program.lower() == 'emacs':
         subprocess.run(['xclip', '-selection', 'clipboard'], input=(text+" ").encode())
         subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'P'])
+    elif program.lower() == 'discord':
+        subprocess.run(['xclip', '-selection', 'clipboard'], input=(text+" ").encode())
+        subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'])
+        time.sleep(1)
     else:
         subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode())
         subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'])
