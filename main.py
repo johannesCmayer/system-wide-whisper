@@ -141,7 +141,7 @@ def paste_text(text):
         pyperclip_paste_text(text)
                 
 def post_process(s):
-    command_prefixes = ['x', 'command']
+    command_prefixes = []
     commands = [
         (['new', 'line'], '\n'),
         (['new', 'paragraph'], '\n\n'),
@@ -303,23 +303,11 @@ async def record():
                     frames_per_buffer=chunk, 
                     input=True)
 
-    frames = []  # Initialize array to store frames
 
-    # Store data in chunks for 3 seconds
+    # Record audio
+    frames = []  # Initialize array to store frames
     n_pause = None
-    while True:
-        if abort_signal_file.exists():
-            f_print('aborting')
-            stream.stop_stream()
-            stream.close()
-            p.terminate()
-            if n_pause:
-                await notifier.clear(n_pause)
-                n_pause = None
-            await notifier.clear(n1)
-            abort_signal_file.unlink()
-            running_signal_file.unlink()
-            exit(0)
+    while not (abort_signal_file.exists() or stop_signal_file.exists() or shutdown_program):
         data = stream.read(chunk)
         if not pause_signal_file.exists():
             frames.append(data)
@@ -329,9 +317,8 @@ async def record():
         else:
             if not n_pause:
                 n_pause = await notifier.send(title="Paused Recording", urgency=Urgency.Critical, message="", attachment=pause_icon)
-        if shutdown_program or stop_signal_file.exists():
-            stop_signal_file.unlink(missing_ok=True)
-            break
+
+    stop_signal_file.unlink(missing_ok=True)
     if n_pause:
         await notifier.clear(n_pause)
 
@@ -342,6 +329,7 @@ async def record():
 
     f_print('Finished recording')
 
+    # Save the recorded data as a WAV file
     mp3_path = f"{audio_path}/{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.mp3"
     with tempfile.TemporaryDirectory() as tmp_dir:
         wav_path = f"{tmp_dir}/temp.wav"
@@ -353,12 +341,19 @@ async def record():
         wf.writeframes(b''.join(frames))
         wf.close()
 
+        # Convert WAV to mp3
         f_print('saving mp3')
         data, fs = sf.read(wav_path) 
         sf.write(mp3_path, data, fs)
 
     await notifier.clear(n1)
     print(mp3_path)
+
+    if abort_signal_file.exists():
+        abort_signal_file.unlink()
+        running_signal_file.unlink()
+        exit(0)
+
     return mp3_path
 
 async def transcribe_2(mp3_path):
@@ -397,6 +392,9 @@ def trim_audio_files():
     if len(audio_paths) > 10:
         for p in audio_paths[:-10]:
             p.unlink()
+
+#def update_completions():
+#    subprocess.run(["fish", "-c", f"'complete -C sytem-wide-whisper -l transcribe -s {sorted(audio_path.glob())}'"])
 
 async def argument_branching():
     if args.abort:
