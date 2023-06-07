@@ -9,7 +9,7 @@
             "name": "system-wide-whisper",
             "type": "python",
             "request": "launch",
-            "program": "system-wide-whisper",
+            "program": "main.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": ["--toggle-recording"]

@@ -215,8 +215,9 @@ def post_process(s):
         commands_3.append((f'{p}', r))
 
     # Insert bullet points, stripping punctuation and capitalizing the first letter
-    s = re.sub('[,.!?]? ?new ?bullet[,.!?]? ?(.)', lambda p: f'\n- {p.group(1).upper()}', s, flags=re.IGNORECASE)
-    s = re.sub('( *- .*)[,.!?]+$', lambda p: p.group(1), s)
+    s = re.sub('[,.!?]? ?new[,.!?]? ?bullet[,.!?]? ?([a-z])?', lambda p: f'\n- {p.group(1).upper()}', s, flags=re.IGNORECASE)
+    # Trim trailing punctuation. This is needed for the last line.
+    s = re.sub('^(\s*- .*)[,.!?]+ *$', lambda p: f"{p.group(1)}", s, flags=re.MULTILINE)
 
     for p,r in commands_3:
         s = re.sub(p, r, s, flags=re.IGNORECASE)
