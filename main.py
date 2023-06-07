@@ -141,53 +141,53 @@ def paste_text(text):
         pyperclip_paste_text(text)
                 
 def post_process(s):
-    command_prefixes = []
     commands = [
         (['new', 'line'], '\n'),
         (['new', 'paragraph'], '\n\n'),
-        (['open', 'parentheses'], ' ('),
-        (['close', 'parentheses'], ') '),
-        (['open', 'parenthesis'], ' ('),
-        (['close', 'parenthesis'], ') '),
-        (['open', 'bracket'], ' ['),
-        (['close', 'bracket'], '] '),
-        (['open', 'curly', 'brace'], ' {'),
-        (['close', 'curly', 'brace'], '} '),
-        (['full', 'stop'], '. '),
-        (['period'], '. '),
-        (['exclamation', 'mark'], '! '),
-        (['comma'], ', '),
-        (['semicolon'], '; '),
-        (['Question', 'mark'], '? '),
-        (['hyphen'], '-'),
-        (['dash'], '-'),
-        (['under', 'score'], '_'),
-        (['new', 'bullet'], '\n- '),
-        (['new', 'bullet', 'point'], '\n- '),
-        (['new', 'numbered', 'bullet'], '\n1. '),
-        (['new', 'numbered', 'bullet', 'point'], '\n1. '),
-        (['back', 'slash'], '\\\\'),
-        (['dollar', 'sign'], '$'),
-        (['percent', 'sign'], '%'),
-        (['ampersand'], '&'),
-        (['asterisk'], '*'),
-        (['at', 'sign'], '@'),
-        (['caret'], '^'),
-        (['tilde'], '~'),
-        (['pipe'], '|'),
-        (['forward', 'slash'], '/'),
-        (['colon'], ': '),
-        (['double', 'quote'], '"'),
-        (['single', 'quote'], "'"),
-        (['less', 'than', 'sign'], '<'),
-        (['greater', 'than', 'sign'], '>'),
-        (['plus', 'sign'], '+'),
-        (['equals', 'sign'], '='),
-        (['hash', 'sign'], '#'),
         (['new', 'horizontal', 'line'], '\n\n---\n\n'),
         (['new', 'to', 'do'], ' #TODO '),
-        (['new', 'to-do'], ' #TODO '),
+        (['new', 'to-do'], ' #TODO ')
     ]
+
+    symbols = [
+        (['symbol', 'open', 'parentheses'], ' ('),
+        (['symbol', 'close', 'parentheses'], ') '),
+        (['symbol', 'open', 'parenthesis'], ' ('),
+        (['symbol', 'close', 'parenthesis'], ') '),
+        (['symbol', 'open', 'bracket'], ' ['),
+        (['symbol', 'close', 'bracket'], '] '),
+        (['symbol', 'open', 'curly', 'brace'], ' {'),
+        (['symbol', 'close', 'curly', 'brace'], '} '),
+        (['symbol', 'full', 'stop'], '. '),
+        (['symbol', 'period'], '. '),
+        (['symbol', 'exclamation', 'mark'], '! '),
+        (['symbol', 'comma'], ', '),
+        (['symbol', 'semicolon'], '; '),
+        (['symbol', 'Question', 'mark'], '? '),
+        (['symbol', 'hyphen'], '-'),
+        (['symbol', 'dash'], '-'),
+        (['symbol', 'under', 'score'], '_'),
+        (['symbol', 'back', 'slash'], '\\\\'),
+        (['symbol', 'dollar', 'sign'], '$'),
+        (['symbol', 'percent', 'sign'], '%'),
+        (['symbol', 'ampersand'], '&'),
+        (['symbol', 'asterisk'], '*'),
+        (['symbol', 'at', 'sign'], '@'),
+        (['symbol', 'caret'], '^'),
+        (['symbol', 'tilde'], '~'),
+        (['symbol', 'pipe'], '|'),
+        (['symbol', 'forward', 'slash'], '/'),
+        (['symbol', 'colon'], ': '),
+        (['symbol', 'double', 'quote'], '"'),
+        (['symbol', 'single', 'quote'], "'"),
+        (['symbol', 'less', 'than', 'sign'], '<'),
+        (['symbol', 'greater', 'than', 'sign'], '>'),
+        (['symbol', 'plus', 'sign'], '+'),
+        (['symbol', 'equals', 'sign'], '='),
+        (['symbol', 'hash', 'sign'], '#'),
+    ]
+
+    commands.extend(symbols)
 
     for i,e in enumerate(['one', 'two', 'three', 'four', 'five', 'six']):
         commands.append((['new', 'heading', e], f'\n\n'+ ("#" * (i)) + ' '))
@@ -211,18 +211,14 @@ def post_process(s):
         commands_2.append((p, r))
     commands_3 = []
     for p,r in commands_2:
-        for prefix in command_prefixes:
-            commands_3.append((f'{prefix}. {p}', r))
-            commands_3.append((f'{prefix}, {p}', r))
-            commands_3.append((f'{prefix} {p}', r))
-            commands_3.append((f'{prefix}{p}', r))
-            commands_3.append((f'{p}', r))
-    commands_4 = []
-    for p,r in commands_3:
-        commands_4.append((f' {p}', r))
-        commands_4.append((f'{p}', r))
+        commands_3.append((f' {p}', r))
+        commands_3.append((f'{p}', r))
 
-    for p,r in commands_4:
+    # Insert bullet points, stripping punctuation and capitalizing the first letter
+    s = re.sub('[,.!?]? ?new ?bullet[,.!?]? ?(.)', lambda p: f'\n- {p.group(1).upper()}', s, flags=re.IGNORECASE)
+    s = re.sub('( *- .*)[,.!?]+$', lambda p: p.group(1), s)
+
+    for p,r in commands_3:
         s = re.sub(p, r, s, flags=re.IGNORECASE)
     return s
 
