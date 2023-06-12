@@ -9,7 +9,8 @@ import re
 import atexit
 import wave
 import multiprocessing
-from datetime import datetime
+from datetime import datetime, timedelta
+import traceback
 
 import openai
 import yaml
@@ -24,6 +25,7 @@ instance_id = datetime.now().strftime("%Y%m%d%H%M%S")
 project_path = Path(os.path.dirname(__file__)).absolute()
 
 logs_dir = project_path / 'logs'
+debug_log_path = logs_dir / 'debug.log'
 transcription_file = logs_dir / "whisper_transcriptions.txt"
 audio_path = project_path / "audio"
 
@@ -52,20 +54,44 @@ ipc_dir.mkdir(exist_ok=True)
 config = yaml.load((project_path / 'config.yaml').open(), yaml.FullLoader)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--start', action='store_true', help='Start the recording.')
-parser.add_argument('--stop', action='store_true', help='Stop the recording and transcribe it.')
-parser.add_argument('--toggle-recording', action='store_true', help='Start the recording if it is not running, if a recording is running, stop it and transcribe it.')
-parser.add_argument('--toggle-pause', action='store_true', help='Pause/Unpause the recording.')
-parser.add_argument('--abort', action='store_true', help="Stop the recording and don't transcribe it")
-parser.add_argument('--clear-notifications', action='store_true', help='Clear all notifications')
-parser.add_argument('--no-postprocessing', action='store_true', help="Do not process special commands. E.g. don't translate 'new line' to an actual newline.")
-parser.add_argument('--start-lowercase', action='store_true', help="The first character will be lowercase (useful for inserting text somewhere.)")
-parser.add_argument('--copy-last', action='store_true', help="Copy the last transcription to the clipboard.")
-parser.add_argument('--list-transcriptions', action='store_true', help="List all past transcriptions.")
-parser.add_argument('--transcribe-last', action='store_true', help="Transcribe the last recording.")
-parser.add_argument('--only-record', action='store_true', help="Only record, don't transcribe.")
-parser.add_argument('--clipboard', action='store_true', help="Don't paste, only copy to clipboard.")
-parser.add_argument('--config', action='store_true', help="Edit the config file.")
+parser.add_argument('--start', action='store_true', 
+    help='Start the recording.')
+parser.add_argument('--stop', action='store_true', 
+    help='Stop the recording and transcribe it.')
+parser.add_argument('--toggle-recording', action='store_true', 
+    help='Start the recording if it is not running, if a recording is running, stop it and transcribe it.')
+parser.add_argument('--toggle-pause', action='store_true', 
+    help='Pause/Unpause the recording.')
+parser.add_argument('--abort', action='store_true', 
+    help="Stop the recording and don't transcribe it")
+parser.add_argument('--clear-notifications', action='store_true', 
+    help='Clear all notifications')
+parser.add_argument('--no-postprocessing', action='store_true', 
+    help="Do not process special commands. E.g. don't translate 'new line' to an actual newline.")
+parser.add_argument('--start-lowercase', action='store_true', 
+    help="The first character will be lowercase (useful for inserting text somewhere.)")
+parser.add_argument('--copy-last', action='store_true', 
+    help="Copy the last transcription to the clipboard.")
+parser.add_argument('--list-transcriptions', action='store_true', 
+    help="List all past transcriptions.")
+parser.add_argument('--transcribe-last', action='store_true', 
+    help="Transcribe the last recording.")
+parser.add_argument('--transcribe-file', type=str, 
+    help="Transcribe a file. By default look for the transcribed files in the project directory. "
+    "If the argument contains one or more slashes, it is interpreted as an path argument relative "
+    "to the current working directory. E.g. `-t 2023_06_11-12_53_28.mp3` will look in the recorded "
+    "files in the audio directory. `-t ./podcast.mp3` will look for a file 'podcast.mp3' in the current "
+    "working directory, and transcribe that. `-t /home/user/recordings/2023_06_11-12_53_28.mp3` will look "
+    "for a file '2023_06_11-12_53_28.mp3' in the directory '/home/user/memo.mp3' or '~/memo.mp3' will look "
+    "for a file 'memo.mp3' in the home directory, and transcribe that.")
+parser.add_argument('--list-recordings', action='store_true', 
+    help="List the paths of recorded audio.")
+parser.add_argument('--only-record', action='store_true', 
+    help="Only record, don't transcribe.")
+parser.add_argument('--clipboard', action='store_true', 
+    help="Don't paste, only copy to clipboard.")
+parser.add_argument('--config', action='store_true', 
+    help="Edit the config file.")
 args = parser.parse_args()
 
 notifier = DesktopNotifier()
@@ -73,8 +99,7 @@ shutdown_program = False
 
 def f_print(s, end='\n'):
     print(s, end=end)
-    with open(logs_dir / 'debug.log', 'a') as f:
-
+    with debug_log_path.open('a') as f:
         f.write(s + end)
 
 def setup_api_key():
@@ -120,6 +145,7 @@ def X_paste_text(text):
     else:
         subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode())
         subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'])
+        time.sleep(0.25)
     subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents.encode())
 
 def pyperclip_paste_text(text):
@@ -140,10 +166,12 @@ def paste_text(text):
     else:
         pyperclip_paste_text(text)
                 
-def post_process(s):
+def character_substitution(s):
     commands = [
         (['new', 'line'], '\n'),
         (['new', 'paragraph'], '\n\n'),
+        # this is a common mistranslation of new paragraph
+        (['you', 'paragraph'], '\n\n'),
         (['new', 'horizontal', 'line'], '\n\n---\n\n'),
         (['new', 'to', 'do'], ' #TODO '),
         (['new', 'to-do'], ' #TODO ')
@@ -223,52 +251,15 @@ def post_process(s):
         s = re.sub(p, r, s, flags=re.IGNORECASE)
     return s
 
-def openai_transcibe(mp3_path, queue):
+def openai_transcibe(mp3_path):
         out = openai.Audio.transcribe(config['model'], open(mp3_path, "rb"), language=config['input_language'])
-        queue['r'] = out.text
-
-def transcribe(mp3_path):
-    setup_api_key()
-    manager = multiprocessing.Manager()
-    qeu = manager.dict()
-    p1 = None
-    if config['use_local_server']:
-        p1 = subprocess.Popen(["curl", "-X", 'POST', f"{config['local_server_url']}/asr?task=transcribe&output=txt", '-H', 'accept: application/json', '-H', 'Content-Type: multipart/form-data', '-F', f'audio_file=@{mp3_path};type=audio/mpeg'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        local_start_time = time.time()
-    p2 = multiprocessing.Process(target=openai_transcibe, args=(mp3_path, qeu,))
-    p2.start()
-    openAI_start_time = time.time()
-    while True:
-        if config['use_local_server'] and p1 and p1.poll() is not None:
-            out, err = p1.communicate()
-            if re.search("Could not resolve host", err.decode('utf-8')):
-                p1 = None
-                continue
-            f_print('local server done first')
-            p2.kill()
-            out = out.decode('utf-8')
-            local_end_time = time.time() - local_start_time
-            with open(logs_dir / 'transciption_time.csv', 'a') as f:
-                f.write(f'local;;; {local_end_time};;; {out}\n')
-            return out
-        if p2 and not p2.is_alive():
-            f_print('openAI server done first')
-            if p1:
-                p1.kill()
-            openAI_end_time = time.time() - openAI_start_time
-            out = qeu['r']
-            with open(logs_dir / 'transciption_time.csv', 'a') as f:
-                f.write(f'OpenAI;;; {openAI_end_time};;; {out}\n')
-            return out
-        if p1 is None and p2 is None:
-            raise Exception('All servers failed!')
-        time.sleep(0.025)
+        return out.text
 
 def process_transcription(text):
     text = text.strip()
     text = text.replace('\n', ' ')
     if not args.no_postprocessing:
-        text = post_process(text)
+        text = character_substitution(text)
     if args.start_lowercase:
         if len(text) >= 2:
             text = text[0].lower() + text[1:]
@@ -285,7 +276,7 @@ async def record():
     stop_signal_file.unlink(missing_ok=True)
     pause_signal_file.unlink(missing_ok=True)
     abort_signal_file.unlink(missing_ok=True)
-    p = pyaudio.PyAudio()  # Create an interface to PortAudio
+    p = pyaudio.PyAudio()
 
     f_print('Recording')
     n1 = await notifier.send(title="Recording for Whisper", urgency=Urgency.Critical, message="", attachment=record_icon)
@@ -299,7 +290,6 @@ async def record():
                     rate=fs,
                     frames_per_buffer=chunk, 
                     input=True)
-
 
     # Record audio
     frames = []  # Initialize array to store frames
@@ -355,7 +345,7 @@ async def record():
 
 async def transcribe_2(mp3_path):
     n2 = await notifier.send(title="Processing", urgency=Urgency.Critical, message="", attachment=processing_icon)
-    out = transcribe(mp3_path)
+    out = openai_transcibe(mp3_path)
     out = process_transcription(out)
     f_print("transcription:", out)
 
@@ -386,12 +376,10 @@ async def asr_pipeline():
 
 def trim_audio_files():
     audio_paths = sorted(audio_path.glob('*.mp3'))
-    if len(audio_paths) > 10:
-        for p in audio_paths[:-10]:
+    records_to_keep = config['number_of_recordings_to_keep']
+    if len(audio_paths) > records_to_keep:
+        for p in audio_paths[:-records_to_keep]:
             p.unlink()
-
-#def update_completions():
-#    subprocess.run(["fish", "-c", f"'complete -C sytem-wide-whisper -l transcribe -s {sorted(audio_path.glob())}'"])
 
 async def argument_branching():
     if args.abort:
@@ -435,6 +423,20 @@ async def argument_branching():
         mp3_path = sorted(audio_path.glob('*.mp3'))[-1]
         text = await transcribe_2(mp3_path)
         paste_text(text)
+    elif args.transcribe_file:
+        if '/' in args.transcribe_file:
+            mp3_path = args.transcribe_file
+        else:
+            mp3_path = audio_path / args.transcribe_file
+        if mp3_path.exists():
+            text = await transcribe_2(mp3_path)
+            paste_text(text)
+        else:
+            f_print(f'File {mp3_path} does not exist.')
+    elif args.list_recordings:
+        for p in sorted(audio_path.glob('*.mp3')):
+            duration = timedelta(seconds=int(sf.info(p).duration))
+            print(f"{p}; {duration}")
     trim_audio_files()
 
 async def async_wrapper():
@@ -454,4 +456,5 @@ if __name__ == '__main__':
     try:
         asyncio.run(async_wrapper())
     except Exception as e:
+        traceback.print_exc(file=debug_log_path.open('a'))
         raise e

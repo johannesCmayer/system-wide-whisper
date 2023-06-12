@@ -1,4 +1,4 @@
-input_language: null
+input_language: en
 model: whisper-1
 use_local_server: false
 local_server_url: http://fritz.local:9000
@@ -7,3 +7,4 @@ local_server_url: http://fritz.local:9000
 # restoring the original clipboard state. Only used for pyperclip,
 # i.e. on macOS and Windows.
 paste_wait: 0.1
+number_of_recordings_to_keep: 20
