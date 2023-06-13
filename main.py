@@ -92,6 +92,8 @@ parser.add_argument('--clipboard', action='store_true',
     help="Don't paste, only copy to clipboard.")
 parser.add_argument('--config', action='store_true', 
     help="Edit the config file.")
+parser.add_argument('--voice-announcements', action='store_true', 
+    help="Speak outloud a notification for when recording starts and ends, and similar events such as pausing.")
 args = parser.parse_args()
 
 notifier = DesktopNotifier()
@@ -294,16 +296,18 @@ async def record():
     # Record audio
     frames = []  # Initialize array to store frames
     n_pause = None
+    global speak_proc
     while not (abort_signal_file.exists() or stop_signal_file.exists() or shutdown_program):
         data = stream.read(chunk)
-        if not pause_signal_file.exists():
-            frames.append(data)
-            if n_pause:
-                await notifier.clear(n_pause)
-                n_pause = None
-        else:
-            if not n_pause:
-                n_pause = await notifier.send(title="Paused Recording", urgency=Urgency.Critical, message="", attachment=pause_icon)
+        if speak_proc is None or speak_proc.poll() is not None:
+            if not pause_signal_file.exists():
+                frames.append(data)
+                if n_pause:
+                    await notifier.clear(n_pause)
+                    n_pause = None
+            else:
+                if not n_pause:
+                    n_pause = await notifier.send(title="Paused Recording", urgency=Urgency.Critical, message="", attachment=pause_icon)
 
     stop_signal_file.unlink(missing_ok=True)
     if n_pause:
@@ -343,7 +347,7 @@ async def record():
 
     return mp3_path
 
-async def transcribe_2(mp3_path):
+async def transcribe(mp3_path):
     n2 = await notifier.send(title="Processing", urgency=Urgency.Critical, message="", attachment=processing_icon)
     out = openai_transcibe(mp3_path)
     out = process_transcription(out)
@@ -370,7 +374,7 @@ def aquire_lock():
 
 async def asr_pipeline():
     mp3_path = await record()
-    text = await transcribe_2(mp3_path)
+    text = await transcribe(mp3_path)
     aquire_lock()
     paste_text(text)
 
@@ -381,8 +385,18 @@ def trim_audio_files():
         for p in audio_paths[:-records_to_keep]:
             p.unlink()
 
+# LOL this doesn't actually work at all because I'm killing this process off that spawns this big command right now. 
+# basically seems that there is no error actually happening of picking up the speak commands in the transcriptions so far 
+# TODO: I should probably remove this at some point. 
+speak_proc = None
+def speak(text):
+    if args.voice_announcements:
+        global speak_proc
+        speak_proc = subprocess.Popen(['gsay', text])
+
 async def argument_branching():
     if args.abort:
+        speak('abort')
         abort_signal_file.touch()
     elif args.only_record:
         mp3_path = await record()
@@ -409,19 +423,23 @@ async def argument_branching():
         running_signal_file.unlink()
     elif args.toggle_recording:
         if not running_signal_file.exists():
+            speak('Record')
             running_signal_file.touch()
             await asr_pipeline()
         else:
+            speak('Stop')
             stop_signal_file.touch()
             running_signal_file.unlink()
     elif args.toggle_pause:
         if pause_signal_file.exists():
             pause_signal_file.unlink()
+            speak('Unpause')
         else:
             pause_signal_file.touch()
+            speak('Pause')
     elif args.transcribe_last:
         mp3_path = sorted(audio_path.glob('*.mp3'))[-1]
-        text = await transcribe_2(mp3_path)
+        text = await transcribe(mp3_path)
         paste_text(text)
     elif args.transcribe_file:
         if '/' in args.transcribe_file:
@@ -429,7 +447,7 @@ async def argument_branching():
         else:
             mp3_path = audio_path / args.transcribe_file
         if mp3_path.exists():
-            text = await transcribe_2(mp3_path)
+            text = await transcribe(mp3_path)
             paste_text(text)
         else:
             f_print(f'File {mp3_path} does not exist.')
