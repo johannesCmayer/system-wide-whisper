@@ -8,3 +8,4 @@ local_server_url: http://fritz.local:9000
 # i.e. on macOS and Windows.
 paste_wait: 0.1
 number_of_recordings_to_keep: 20
+notifier_system: desktop-notifier

@@ -1,4 +1,5 @@
 import os
+import platform
 import tempfile
 import subprocess
 from pathlib import Path
@@ -8,7 +9,6 @@ import sys
 import re
 import atexit
 import wave
-import multiprocessing
 from datetime import datetime, timedelta
 import traceback
 
@@ -20,6 +20,9 @@ from pynput.keyboard import Key, Controller
 import asyncio
 import soundfile as sf
 import pyaudio
+
+from popup import PopupWindow
+from macos_alert import Popup
 
 instance_id = datetime.now().strftime("%Y%m%d%H%M%S")
 project_path = Path(os.path.dirname(__file__)).absolute()
@@ -52,6 +55,9 @@ audio_path.mkdir(exist_ok=True)
 ipc_dir.mkdir(exist_ok=True)
 
 config = yaml.load((project_path / 'config.yaml').open(), yaml.FullLoader)
+if platform.system() == 'Darwin':
+    print('Overwrite: Using macos-alert notifier')
+    config['notifier_system'] = 'macos-alert'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--start', action='store_true', 
@@ -96,7 +102,8 @@ parser.add_argument('--voice-announcements', action='store_true',
     help="Speak outloud a notification for when recording starts and ends, and similar events such as pausing.")
 args = parser.parse_args()
 
-notifier = DesktopNotifier()
+if config['notifier_system'] == 'desktop-notifier':
+    notifier = DesktopNotifier()
 shutdown_program = False
 
 def f_print(s, end='\n'):
@@ -274,6 +281,28 @@ def process_transcription(text):
     text = re.sub("[,.!?]:", ":", text)
     return text
 
+async def push_notification(title, message, icon):
+    if config['notifier_system'] == 'tkinter':
+        return PopupWindow("Recording for Whisper", "Recording for Whisper", 100, 100, 100, 100, icon)
+    elif config['notifier_system'] == 'desktop-notifier':
+        return await notifier.send(title="Recording for Whisper", urgency=Urgency.Critical, message="", attachment=record_icon)
+    elif config['notifier_system'] == 'macos-alert':
+        x = Popup(title=title, description=message)
+        x.display()
+        return x
+    else:
+        raise Exception('Notifier system not supported')
+
+async def clear_notification(notification):
+    if config['notifier_system'] == 'tkinter':
+        notification.close()
+    elif config['notifier_system'] == 'desktop-notifier':
+        await notifier.clear(notification)
+    elif config['notifier_system'] == 'macos-alert':
+        notification.close()
+    else:
+        raise Exception('Notifier system not supported')
+
 async def record():
     stop_signal_file.unlink(missing_ok=True)
     pause_signal_file.unlink(missing_ok=True)
@@ -281,8 +310,7 @@ async def record():
     p = pyaudio.PyAudio()
 
     f_print('Recording')
-    n1 = await notifier.send(title="Recording for Whisper", urgency=Urgency.Critical, message="", attachment=record_icon)
-
+    n1 = await push_notification("Recording for Whisper", "Recording for Whisper", record_icon)
     chunk = 1024  # Record in chunks of 1024 samples
     sample_format = pyaudio.paInt16  # 16 bits per sample
     channels = 1
@@ -302,16 +330,22 @@ async def record():
         if speak_proc is None or speak_proc.poll() is not None:
             if not pause_signal_file.exists():
                 frames.append(data)
+                if n1 is None:
+                    n1 = await push_notification("Recording for Whisper", "Recording for Whisper", record_icon)
                 if n_pause:
-                    await notifier.clear(n_pause)
+                    await clear_notification(n_pause)
                     n_pause = None
             else:
                 if not n_pause:
-                    n_pause = await notifier.send(title="Paused Recording", urgency=Urgency.Critical, message="", attachment=pause_icon)
+                    await clear_notification(n1)
+                    n1 = None
+                    n_pause = await push_notification("Paused Recording", "Paused Recording", pause_icon)
+
+    if n_pause:
+        await clear_notification(n_pause)
+    await clear_notification(n1)
 
     stop_signal_file.unlink(missing_ok=True)
-    if n_pause:
-        await notifier.clear(n_pause)
 
     # Stop and close the stream 
     stream.stop_stream()
@@ -337,7 +371,6 @@ async def record():
         data, fs = sf.read(wav_path) 
         sf.write(mp3_path, data, fs)
 
-    await notifier.clear(n1)
     print(mp3_path)
 
     if abort_signal_file.exists():
@@ -348,7 +381,7 @@ async def record():
     return mp3_path
 
 async def transcribe(mp3_path):
-    n2 = await notifier.send(title="Processing", urgency=Urgency.Critical, message="", attachment=processing_icon)
+    n2 = await push_notification("Processing", "Processing", icon=processing_icon)
     out = openai_transcibe(mp3_path)
     out = process_transcription(out)
     f_print("transcription:", out)
@@ -358,8 +391,9 @@ async def transcribe(mp3_path):
         f.write('====================================\n')
         f.write(out)
 
-    await notifier.clear(n2)
+    await clear_notification(n2)
     return out
+
 
 def aquire_lock():
     locks = list(lock_path.iterdir())
@@ -414,7 +448,8 @@ async def argument_branching():
         for line in lines:
             print(line, end='')
     elif args.clear_notifications:
-        await notifier.clear_all()
+        if config['notifier_system'] == 'desktop-notifier':
+            await notifier.clear_all()
     elif args.start:
         running_signal_file.touch()
         await asr_pipeline()
@@ -461,8 +496,9 @@ async def async_wrapper():
     try:
         await argument_branching()
     except Exception as e:
-        await notifier.clear_all()
-        await notifier.send(title="Error", urgency=Urgency.Critical, message=str(e), attachment=error_icon)
+        if config['notifier_system'] == 'desktop-notifier':
+            await notifier.clear_all()
+        await push_notification("Error", str(e), icon=error_icon)
         f_print(str(e))
         raise e
 
