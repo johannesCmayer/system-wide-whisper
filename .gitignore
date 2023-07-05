@@ -5,3 +5,4 @@ IPC/
 __pycache__/
 audio/
 config_local.yaml
+locks/
