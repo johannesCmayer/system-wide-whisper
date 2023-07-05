@@ -24,7 +24,7 @@ usage: main.py [-h] [--start] [--stop] [--toggle-recording] [--toggle-pause]
                [--voice-announcements]
 
 The default config can be picewise overwritten by a config_local.yaml file
-placed in /Users/johannes/projects/system-wide-whisper.
+placed in the project directory.
 
 options:
   -h, --help            show this help message and exit

@@ -60,7 +60,7 @@ if not config_local_path.exists():
     config_local_path.touch()
 config.update(yaml.load(config_local_path.open(), yaml.FullLoader))
 
-parser = argparse.ArgumentParser(description=f'The default config can be picewise overwritten by a config_local.yaml file placed in {project_path}.')
+parser = argparse.ArgumentParser(description=f'The default config can be picewise overwritten by a config_local.yaml file placed in the project directory: {project_path}.')
 parser.add_argument('--start', action='store_true', 
     help='Start the recording.')
 parser.add_argument('--stop', action='store_true', 
@@ -105,7 +105,6 @@ args = parser.parse_args()
 
 if config['notifier_system'] == 'desktop-notifier':
     notifier = DesktopNotifier()
-shutdown_program = False
 
 def f_print(s, end='\n'):
     print(s, end=end)
@@ -326,7 +325,7 @@ async def record():
     frames = []  # Initialize array to store frames
     n_pause = None
     global speak_proc
-    while not (abort_signal_file.exists() or stop_signal_file.exists() or shutdown_program):
+    while not (abort_signal_file.exists() or stop_signal_file.exists()):
         data = stream.read(chunk)
         if speak_proc is None or speak_proc.poll() is not None:
             if not pause_signal_file.exists():
