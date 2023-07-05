@@ -1,2 +1,6 @@
+api_key.yaml
+api_keys.yaml
+logs/
+IPC/
 __pycache__/
 audio/
