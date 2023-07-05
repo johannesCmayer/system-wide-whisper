@@ -4,7 +4,7 @@ Use whisper anywhere on your system to enter text. Requires the [whisper-asr-web
 I am using [skhd](https://github.com/koekeishiya/skhd) for the keyboard shortcuts. Though you can use anything that can execute a program with a keyboard shortcut. Also see [this example config](skhdrc_example_config) for skhd.
 
 ## Using main_wrapper
-It is reccomended to use the `main_wrapper` script to run the program. I am using file IPC, and therefore having a short startup time reduces input lag significantly (I know, using sockets would just be better. Maybe I will switch to that eventually). The script only runs python if necessary.
+It is reccomended to use the `main_wrapper` script to run the program. I am using file IPC, and therefore having a short startup time reduces input lag significantly (I know, using sockets would just be better. Especially because a server could reduce the python startup time. Maybe I will switch to that eventually). The script only runs python if necessary.
 
 This requires that you put the python path option in the `config_local.yaml` file (see help). E.g. we would add the line
 `python_path: /opt/homebrew/Caskroom/miniconda/base/envs/system-wide-whisper/bin/python`
