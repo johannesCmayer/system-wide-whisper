@@ -1,7 +1,7 @@
 # system-wide-whisper
 Use whisper anywhere on your system to enter text. Requires the [whisper-asr-webservice](https://github.com/ahmetoner/whisper-asr-webservice), or an OpenAI API key.
 
-I am using [skhd](https://github.com/koekeishiya/skhd) for the keyboard shortcuts. Though you can use anything that can execute a program with a keyboard shortcut.
+I am using [skhd](https://github.com/koekeishiya/skhd) for the keyboard shortcuts. Though you can use anything that can execute a program with a keyboard shortcut. Also see [this example config](skhdrc_example_config) for skhd.
 
 ## Using main_wrapper
 It is reccomended to use the `main_wrapper` script to run the program. I am using file IPC, and therefore having a short startup time reduces input lag significantly (I know, using sockets would just be better. Maybe I will switch to that eventually). The script only runs python if necessary.
