@@ -1,0 +1,41 @@
+#!/bin/sh
+
+project_dir=$(dirname $(readlink -f $0))
+ipc_dir="$project_dir"/IPC
+stop_signal_file="$ipc_dir"/stop
+pause_signal_file="$ipc_dir"/pause
+abort_signal_file="$ipc_dir"/abort
+running_signal_file="$ipc_dir"/running
+
+run () {
+    python=$(yq '.python_path' < "$project_dir"/config_local.yaml)
+    "$python" "$project_dir"/main.py "$@"
+}
+
+case "$1" in
+    --toggle-recording)
+        if [ ! -f running_signal_file ]; then
+            run "$@"
+        else
+            touch "$stop_signal_file"
+            rm "$running_signal_file"
+        fi
+        ;;
+    --stop)
+        touch "$stop_signal_file"
+        rm "$running_signal_file"
+        ;;
+    --toggle-pause)
+        if [ -f "$pause_signal_file" ]; then
+            rm "$pause_signal_file"
+        else
+            touch "$pause_signal_file"
+        fi
+        ;;
+    --abort)
+        touch "$abort_signal_file"
+        ;;
+    *)
+        run "$@"
+        ;;
+esac

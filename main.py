@@ -1,5 +1,4 @@
 import os
-import platform
 import tempfile
 import subprocess
 from pathlib import Path
@@ -121,7 +120,7 @@ def setup_api_key():
         api_key_path = (project_path / 'api_keys.yaml')
         if not api_key_path.exists():
             with api_key_path.open('w') as f:
-                yaml.dump({'openai': api_key_placeholder, 'assembly_ai': api_key_placeholder}, f)
+                yaml.dump({'openai': api_key_placeholder}, f)
         openai_api_key = yaml.safe_load(open(project_path / 'api_keys.yaml'))['openai']
         if openai_api_key == api_key_placeholder:
             f_print("Please put your OpenAI API key in the 'api_keys.yaml' file, located at {api_key_path}")
