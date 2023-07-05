@@ -21,8 +21,7 @@ import asyncio
 import soundfile as sf
 import pyaudio
 
-from popup import PopupWindow
-from macos_alert import Popup
+from popup import TkinterPopup, MacOSAlertPopup, TerminalNotifierPopup
 
 instance_id = datetime.now().strftime("%Y%m%d%H%M%S")
 project_path = Path(os.path.dirname(__file__)).absolute()
@@ -55,11 +54,14 @@ audio_path.mkdir(exist_ok=True)
 ipc_dir.mkdir(exist_ok=True)
 
 config = yaml.load((project_path / 'config.yaml').open(), yaml.FullLoader)
-if platform.system() == 'Darwin':
-    print('Overwrite: Using macos-alert notifier')
-    config['notifier_system'] = 'macos-alert'
 
-parser = argparse.ArgumentParser()
+# Load the local config to overwrite defaults if it exists
+config_local_path = project_path / 'config_local.yaml'
+if not config_local_path.exists(): 
+    config_local_path.touch()
+config.update(yaml.load(config_local_path.open(), yaml.FullLoader))
+
+parser = argparse.ArgumentParser(description=f'The default config can be picewise overwritten by a config_local.yaml file placed in {project_path}.')
 parser.add_argument('--start', action='store_true', 
     help='Start the recording.')
 parser.add_argument('--stop', action='store_true', 
@@ -282,26 +284,26 @@ def process_transcription(text):
     return text
 
 async def push_notification(title, message, icon):
-    if config['notifier_system'] == 'tkinter':
-        return PopupWindow("Recording for Whisper", "Recording for Whisper", 100, 100, 100, 100, icon)
+    if config['notifier_system'] == 'terminal-notifier':
+        n = TerminalNotifierPopup(title=title, description=message, icon=icon)
+        n.display()
+        return n
+    elif config['notifier_system'] == 'tkinter':
+        return TkinterPopup("Recording for Whisper", "Recording for Whisper", 100, 100, 100, 100, icon)
     elif config['notifier_system'] == 'desktop-notifier':
         return await notifier.send(title="Recording for Whisper", urgency=Urgency.Critical, message="", attachment=record_icon)
     elif config['notifier_system'] == 'macos-alert':
-        x = Popup(title=title, description=message)
+        x = MacOSAlertPopup(title=title, description=message)
         x.display()
         return x
     else:
         raise Exception('Notifier system not supported')
 
 async def clear_notification(notification):
-    if config['notifier_system'] == 'tkinter':
-        notification.close()
-    elif config['notifier_system'] == 'desktop-notifier':
+    if config['notifier_system'] == 'desktop-notifier':
         await notifier.clear(notification)
-    elif config['notifier_system'] == 'macos-alert':
-        notification.close()
     else:
-        raise Exception('Notifier system not supported')
+        notification.clear()
 
 async def record():
     stop_signal_file.unlink(missing_ok=True)
@@ -343,7 +345,8 @@ async def record():
 
     if n_pause:
         await clear_notification(n_pause)
-    await clear_notification(n1)
+    if n1:
+        await clear_notification(n1)
 
     stop_signal_file.unlink(missing_ok=True)
 

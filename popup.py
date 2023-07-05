@@ -1,8 +1,36 @@
 import time
 import tkinter as tk
 from PIL import Image, ImageTk
+import subprocess
+import uuid
 
-class PopupWindow:
+class MacOSAlertPopup:
+    def __init__(self, title, description):
+        self.title = title
+        self.message = description
+
+    def display(self):
+        self.p = subprocess.Popen(['osascript', '-e', 'display alert "{}" message "{}"'.format(self.title, self.message)])
+
+    def clear(self):
+        self.p.kill()
+
+
+class TerminalNotifierPopup:
+    def __init__(self, title, description, icon):
+        self.title = title
+        self.message = description
+        self.icon = icon
+        self.id = str(uuid.uuid1())
+
+    def display(self):
+        subprocess.Popen(['terminal-notifier', '-title', self.title, '-message', self.message, '-group', self.id, '-contentImage', self.icon, '-appIcon', self.icon])
+
+    def clear(self):
+        subprocess.Popen(['terminal-notifier', '-remove', self.id])
+
+
+class TkinterPopup:
     y_offset = 0
     def __init__(self, title, message, x, y, width=200, height=100, image_path=None):
         self.height = height
@@ -26,10 +54,10 @@ class PopupWindow:
         self.popup.lift()
         self.popup.attributes('-topmost', True)
         self.popup.update()
-        PopupWindow.y_offset += self.height
+        TkinterPopup.y_offset += self.height
 
-    def close(self):
-        PopupWindow.y_offset -= self.height
+    def clear(self):
+        TkinterPopup.y_offset -= self.height
         self.popup.update()
         self.popup.destroy()
         self.popup.update()
@@ -39,11 +67,16 @@ class PopupWindow:
     @classmethod
     def kill(cls):
         pass
-        
 
-if __name__ == '__main__':
-    test = PopupWindow('Title', 'Message', 100, 100, 300, 200)
+def test_tkinter():    
+    test = TkinterPopup('Title', 'Message', 100, 100, 300, 200)
     time.sleep(2)
-    test.close()
+    test.clear()
     print('killed')
     time.sleep(2)
+
+def test_terminal_notifier():
+    test = TerminalNotifierPopup('Title', 'Message', '/Users/johannes/projects/system-wide-whisper/icons/error_icon.png')
+
+if __name__ == '__main__':
+    test_terminal_notifier()
