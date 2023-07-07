@@ -7,6 +7,7 @@ import time
 import sys
 import re
 import atexit
+from typing import Tuple
 import wave
 from datetime import datetime, timedelta
 import traceback
@@ -175,15 +176,23 @@ def paste_text(text):
     else:
         pyperclip_paste_text(text)
                 
-def character_substitution(s):
-    commands = [
+def text_substitution(s):
+    format_commands = [
         (['new', 'line'], '\n'),
         (['new', 'paragraph'], '\n\n'),
         # this is a common mistranslation of new paragraph
         (['you', 'paragraph'], '\n\n'),
         (['new', 'horizontal', 'line'], '\n\n---\n\n'),
         (['new', 'to', 'do'], ' #TODO '),
-        (['new', 'to-do'], ' #TODO ')
+        (['new', 'to-do'], ' #TODO '),
+    ]
+
+    direct_substitutions : Tuple[str, str] = [
+        ('name ?ear',   'IA'),
+        ('name ?ia',    'IA'),
+        ('name ?jack',  'JACK'),
+        ('name ?g',     'JI'),
+        ('name ?Karel', 'Kaarel'),
     ]
 
     symbols = [
@@ -224,19 +233,15 @@ def character_substitution(s):
         (['symbol', 'hash', 'sign'], '#'),
     ]
 
-    commands.extend(symbols)
+    format_commands.extend(symbols)
 
-    for i,e in enumerate(['one', 'two', 'three', 'four', 'five', 'six']):
-        commands.append((['new', 'heading', e], f'\n\n'+ ("#" * (i)) + ' '))
-        commands.append((['new', 'heading', str(i)], f'\n\n'+ ("#" * (i)) + ' '))
-
-    commands_help = "\n".join([' '.join(c) + ": '" + re.sub('\n', '⏎', t) + "'" for c,t in commands])
+    commands_help = "\n".join([' '.join(c) + ": '" + re.sub('\n', '⏎', t) + "'" for c,t in format_commands])
     if s.lower().strip().replace(' ', '').replace(',', '').replace('.', '') == ''.join(['command', 'print', 'help']):
         f_print('print help')
         return commands_help
 
     commands_1 = []
-    for p,r in commands:
+    for p,r in format_commands:
         commands_1.append((''.join(p), r))
         commands_1.append((' '.join(p), r))
     commands_2 = []
@@ -251,6 +256,14 @@ def character_substitution(s):
         commands_3.append((f' {p}', r))
         commands_3.append((f'{p}', r))
 
+    for p,r in direct_substitutions:
+        s = re.sub(p, r, s, flags=re.IGNORECASE)
+
+    # Commands to insert headings
+    for i,e in enumerate(['one', 'two', 'three', 'four', 'five', 'six']):
+        format_commands.append((['new', 'heading', e], f'\n\n'+ ("#" * (i)) + ' '))
+        format_commands.append((['new', 'heading', str(i)], f'\n\n'+ ("#" * (i)) + ' '))
+
     # Insert bullet points, stripping punctuation and capitalizing the first letter
     s = re.sub('[,.!?]? ?new[,.!?]? ?bullet[,.!?]? ?([a-z])?', lambda p: f'\n- {p.group(1).upper() if p.group(1) else ""}', s, flags=re.IGNORECASE)
     # Trim trailing punctuation. This is needed for the last line.
@@ -258,17 +271,18 @@ def character_substitution(s):
 
     for p,r in commands_3:
         s = re.sub(p, r, s, flags=re.IGNORECASE)
+
     return s
 
 def openai_transcibe(mp3_path):
-        out = openai.Audio.transcribe(config['model'], open(mp3_path, "rb"), language=config['input_language'])
-        return out.text
+    out = openai.Audio.transcribe(config['model'], open(mp3_path, "rb"), language=config['input_language'])
+    return out.text
 
 def process_transcription(text):
     text = text.strip()
     text = text.replace('\n', ' ')
     if not args.no_postprocessing:
-        text = character_substitution(text)
+        text = text_substitution(text)
     if args.start_lowercase:
         if len(text) >= 2:
             text = text[0].lower() + text[1:]
