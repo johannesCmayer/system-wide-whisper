@@ -1,3 +1,5 @@
+- migrate all old functionality to server model
+- remove all cruft
 - setup "universal remote" shortcuts for server
 - Remove file IPC
 
