@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# This script generates a client script that can be used to send messages to the server
+# This is done such that we do not need to use yq, such that the startup time of the 
+# client is reduced. This only needs to be run when the IP or port changes in the config.yaml
+
+project_dir=$(dirname $(readlink -f $0))
+IP=$(yq .IP < "$project_dir"/config.yaml)
+port=$(yq .port < "$project_dir"/config.yaml)
+echo '#!/bin/sh' > "$project_dir"/client
+echo 'echo "$@" | nc '"$IP"" ""$port" >> "$project_dir"/client
+
+chmod +x "$project_dir"/client

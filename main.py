@@ -1,3 +1,5 @@
+import socket
+import threading
 import timeit
 program_start_time = timeit.default_timer()
 import time
@@ -129,7 +131,8 @@ stream = p.open(format=sample_format,
                 input=True,
                 start=False)
 
-def cleanup():
+@atexit.register
+def pyaudio_cleanup():
     stream.stop_stream()
     stream.close()
     p.terminate()
@@ -458,6 +461,7 @@ async def asr_pipeline():
     text = await transcribe(mp3_path)
     aquire_lock()
     paste_text(text)
+    instance_lock_path.unlink(missing_ok=True)
 
 def trim_audio_files():
     audio_paths = sorted(audio_path.glob('*.mp3'))
@@ -475,7 +479,7 @@ def speak(text):
         global speak_proc
         speak_proc = subprocess.Popen(['gsay', text])
 
-async def argument_branching():
+async def argument_branching(args):
     if args.abort:
         speak('abort')
         abort_signal_file.touch()
@@ -497,28 +501,28 @@ async def argument_branching():
     elif args.clear_notifications:
         if config['notifier_system'] == 'desktop-notifier':
             await notifier.clear_all()
-    elif args.start:
-        running_signal_file.touch()
-        await asr_pipeline()
-    elif args.stop:
-        stop_signal_file.touch()
-        running_signal_file.unlink()
-    elif args.toggle_recording:
-        if not running_signal_file.exists():
-            speak('Record')
-            running_signal_file.touch()
-            await asr_pipeline()
-        else:
-            speak('Stop')
-            stop_signal_file.touch()
-            running_signal_file.unlink()
-    elif args.toggle_pause:
-        if pause_signal_file.exists():
-            pause_signal_file.unlink()
-            speak('Unpause')
-        else:
-            pause_signal_file.touch()
-            speak('Pause')
+    # elif args.start:
+    #     running_signal_file.touch()
+    #     await asr_pipeline()
+    # elif args.stop:
+    #     stop_signal_file.touch()
+    #     running_signal_file.unlink()
+    # elif args.toggle_recording:
+    #     if not running_signal_file.exists():
+    #         speak('Record')
+    #         running_signal_file.touch()
+    #         await asr_pipeline()
+    #     else:
+    #         speak('Stop')
+    #         stop_signal_file.touch()
+    #         running_signal_file.unlink()
+    # elif args.toggle_pause:
+    #     if pause_signal_file.exists():
+    #         pause_signal_file.unlink()
+    #         speak('Unpause')
+    #     else:
+    #         pause_signal_file.touch()
+    #         speak('Pause')
     elif args.transcribe_last:
         mp3_path = sorted(audio_path.glob('*.mp3'))[-1]
         text = await transcribe(mp3_path)
@@ -539,9 +543,56 @@ async def argument_branching():
             print(f"{p}; {duration}")
     trim_audio_files()
 
+def asr_pipeline_wrapper():
+    asyncio.run(asr_pipeline())
+
+def server_command_receiver():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind((config['IP'], config['port']))
+    s.listen(5)
+    started = False
+    while True:
+        conn, addr = s.accept()
+        print(f'Got connection from {addr}')
+        with conn:
+            msg = conn.recv(1024)
+            msg = msg.decode('utf-8').strip()
+            print(f'Got message: {msg}')
+
+            match msg:
+                case '--abort':
+                    print(f'abort')
+                    speak('abort')
+                    abort_signal_file.touch()
+                case '--toggle-recording':
+                    print(f'tr')
+                    if started:
+                        stop_signal_file.touch()
+                        running_signal_file.unlink()
+                        speak('Stop')
+                        started = False
+                    else:
+                        threading.Thread(target=asr_pipeline_wrapper).start()
+                        running_signal_file.touch()
+                        started = True
+                case '--toggle-pause':
+                    if pause_signal_file.exists():
+                        pause_signal_file.unlink()
+                        speak('Unpause')
+                    else:
+                        pause_signal_file.touch()
+                        speak('Pause')
+                case '--help':
+                    help = parser.format_help()
+                    conn.sendall(help.encode())
+                case _ as text:
+                    response = f'{text} is not a valid command'
+                    print(response)
+                    conn.sendall(response.encode())
+
 async def async_wrapper():
     try:
-        await argument_branching()
+        await server_command_receiver()
     except Exception as e:
         if config['notifier_system'] == 'desktop-notifier':
             await notifier.clear_all()
@@ -549,13 +600,14 @@ async def async_wrapper():
         f_print(str(e))
         raise e
 
+@atexit.register
 def cleanup():
     instance_lock_path.unlink(missing_ok=True)
 
 if __name__ == '__main__':
-    atexit.register(cleanup)
     try:
         asyncio.run(async_wrapper())
     except Exception as e:
         traceback.print_exc(file=debug_log_path.open('a'))
         raise e
+

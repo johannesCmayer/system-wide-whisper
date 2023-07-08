@@ -1,1 +1,4 @@
 - fix the record only option, it is currently kind of broken.
+
+SoT
+- register the pyaudio cleanup function using a construction with a decorator

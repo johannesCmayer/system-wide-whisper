@@ -1,3 +1,6 @@
+# Note make sure that you don't use fish as your shell when running skhd commands. 
+# That makes everything very slow (at least when your fish startup is low, which could 
+# happen if you have many entries in $PATH)
 cmd + ctrl + ralt + shift - e : /Users/johannes/bin/ww --toggle-pause
 rcmd + ctrl + ralt + shift - u : /Users/johannes/bin/ww --toggle-recording
 cmd + ctrl + ralt + shift - u : /Users/johannes/bin/ww --toggle-recording --start-lowercase
