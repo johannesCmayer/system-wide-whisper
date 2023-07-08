@@ -1,9 +1,11 @@
+import timeit
+program_start_time = timeit.default_timer()
+import time
 import os
 import tempfile
 import subprocess
 from pathlib import Path
 import argparse
-import time
 import sys
 import re
 import atexit
@@ -22,6 +24,10 @@ import soundfile as sf
 import pyaudio
 
 from popup import TkinterPopup, MacOSAlertPopup, TerminalNotifierPopup
+end_time = timeit.default_timer() - program_start_time
+print(f"Importing took {end_time} seconds")
+
+start_time = timeit.default_timer()
 
 instance_id = datetime.now().strftime("%Y%m%d%H%M%S")
 project_path = Path(os.path.dirname(__file__)).absolute()
@@ -106,6 +112,9 @@ args = parser.parse_args()
 
 if config['notifier_system'] == 'desktop-notifier':
     notifier = DesktopNotifier()
+
+end_time = timeit.default_timer() - start_time
+print(f"Setup took {end_time} seconds")
 
 def f_print(s, end='\n'):
     print(s, end=end)
@@ -274,11 +283,8 @@ def text_substitution(s):
 
     return s
 
-def openai_transcibe(mp3_path):
-    out = openai.Audio.transcribe(config['model'], open(mp3_path, "rb"), language=config['input_language'])
-    return out.text
-
 def process_transcription(text):
+    start_time = timeit.default_timer()
     text = text.strip()
     text = text.replace('\n', ' ')
     if not args.no_postprocessing:
@@ -293,7 +299,13 @@ def process_transcription(text):
     text = re.sub("[Tt]hank [Yy]ou\. ?$", "", text)
     text = re.sub(". \)", ".\)", text)
     text = re.sub("[,.!?]:", ":", text)
+    end_time = timeit.default_timer() - start_time
+    print(f"Text postprocessing took {end_time} seconds")
     return text
+
+def openai_transcibe(mp3_path):
+    out = openai.Audio.transcribe(config['model'], open(mp3_path, "rb"), language=config['input_language'])
+    return out.text
 
 async def push_notification(title, message, icon):
     if config['notifier_system'] == 'terminal-notifier':
@@ -318,6 +330,7 @@ async def clear_notification(notification):
         notification.clear()
 
 async def record():
+    start_time = timeit.default_timer()
     stop_signal_file.unlink(missing_ok=True)
     pause_signal_file.unlink(missing_ok=True)
     abort_signal_file.unlink(missing_ok=True)
@@ -339,6 +352,10 @@ async def record():
     frames = []  # Initialize array to store frames
     n_pause = None
     global speak_proc
+    end_time = timeit.default_timer() - start_time
+    print(f"Recording setup took {end_time} seconds")
+    program_start_to_record_time = timeit.default_timer() - program_start_time
+    print(f"Program start to record time took {program_start_to_record_time} seconds")
     while not (abort_signal_file.exists() or stop_signal_file.exists()):
         data = stream.read(chunk)
         if speak_proc is None or speak_proc.poll() is not None:
@@ -354,7 +371,7 @@ async def record():
                     await clear_notification(n1)
                     n1 = None
                     n_pause = await push_notification("Paused Recording", "Paused Recording", pause_icon)
-
+    start_time = timeit.default_timer()
     if n_pause:
         await clear_notification(n_pause)
     if n1:
@@ -368,7 +385,10 @@ async def record():
     p.terminate()
 
     f_print('Finished recording')
+    end_time = timeit.default_timer() - start_time
+    print(f"Recording cleanup took {end_time} seconds")
 
+    start_time = timeit.default_timer()
     # Save the recorded data as a WAV file
     mp3_path = f"{audio_path}/{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.mp3"
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -385,6 +405,8 @@ async def record():
         f_print('saving mp3')
         data, fs = sf.read(wav_path) 
         sf.write(mp3_path, data, fs)
+    end_time = timeit.default_timer() - start_time
+    print(f"Converting and saving mp3 took {end_time} seconds")
 
     print(mp3_path)
 
@@ -396,6 +418,7 @@ async def record():
     return mp3_path
 
 async def transcribe(mp3_path):
+    start_time = timeit.default_timer()
     n2 = await push_notification("Processing", "Processing", icon=processing_icon)
     out = openai_transcibe(mp3_path)
     out = process_transcription(out)
@@ -407,6 +430,8 @@ async def transcribe(mp3_path):
         f.write(out)
 
     await clear_notification(n2)
+    end_time = timeit.default_timer() - start_time
+    print(f"Transcribing took {end_time} seconds")
     return out
 
 
