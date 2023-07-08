@@ -116,6 +116,24 @@ if config['notifier_system'] == 'desktop-notifier':
 end_time = timeit.default_timer() - start_time
 print(f"Setup took {end_time} seconds")
 
+# Setup the pyaudio recording stream
+p = pyaudio.PyAudio()
+chunk = 1024  # Record in chunks of 1024 samples
+sample_format = pyaudio.paInt16  # 16 bits per sample
+channels = 1
+fs = 44100  # Record at 44100 samples per second
+stream = p.open(format=sample_format,
+                channels=channels,
+                rate=fs,
+                frames_per_buffer=chunk, 
+                input=True,
+                start=False)
+
+def cleanup():
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
 def f_print(s, end='\n'):
     print(s, end=end)
     with debug_log_path.open('a') as f:
@@ -334,19 +352,9 @@ async def record():
     stop_signal_file.unlink(missing_ok=True)
     pause_signal_file.unlink(missing_ok=True)
     abort_signal_file.unlink(missing_ok=True)
-    p = pyaudio.PyAudio()
 
     f_print('Recording')
     n1 = await push_notification("Recording for Whisper", "Recording for Whisper", record_icon)
-    chunk = 1024  # Record in chunks of 1024 samples
-    sample_format = pyaudio.paInt16  # 16 bits per sample
-    channels = 1
-    fs = 44100  # Record at 44100 samples per second
-    stream = p.open(format=sample_format,
-                    channels=channels,
-                    rate=fs,
-                    frames_per_buffer=chunk, 
-                    input=True)
 
     # Record audio
     frames = []  # Initialize array to store frames
@@ -356,6 +364,7 @@ async def record():
     print(f"Recording setup took {end_time} seconds")
     program_start_to_record_time = timeit.default_timer() - program_start_time
     print(f"Program start to record time took {program_start_to_record_time} seconds")
+    stream.start_stream()
     while not (abort_signal_file.exists() or stop_signal_file.exists()):
         data = stream.read(chunk)
         if speak_proc is None or speak_proc.poll() is not None:
@@ -371,6 +380,8 @@ async def record():
                     await clear_notification(n1)
                     n1 = None
                     n_pause = await push_notification("Paused Recording", "Paused Recording", pause_icon)
+    stream.stop_stream()
+
     start_time = timeit.default_timer()
     if n_pause:
         await clear_notification(n_pause)
@@ -379,11 +390,6 @@ async def record():
 
     stop_signal_file.unlink(missing_ok=True)
 
-    # Stop and close the stream 
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
-
     f_print('Finished recording')
     end_time = timeit.default_timer() - start_time
     print(f"Recording cleanup took {end_time} seconds")
@@ -391,6 +397,7 @@ async def record():
     start_time = timeit.default_timer()
     # Save the recorded data as a WAV file
     mp3_path = f"{audio_path}/{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.mp3"
+    global fs
     with tempfile.TemporaryDirectory() as tmp_dir:
         wav_path = f"{tmp_dir}/temp.wav"
         f_print('saving wav')
