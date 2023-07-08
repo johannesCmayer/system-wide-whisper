@@ -4,10 +4,20 @@
 # This is done such that we do not need to use yq, such that the startup time of the 
 # client is reduced. This only needs to be run when the IP or port changes in the config.yaml
 
+gen () {
+    program_name=$1
+    IP=$2
+    port=$3
+    echo '#!/bin/sh' > "$project_dir"/"$program_name"
+    echo 'echo "$@" | nc '"$IP"" ""$port" >> "$project_dir"/"$program_name"
+
+    chmod +x "$project_dir"/"$program_name"
+}
+
 project_dir=$(dirname $(readlink -f $0))
 IP=$(yq .IP < "$project_dir"/config.yaml)
 port=$(yq .port < "$project_dir"/config.yaml)
-echo '#!/bin/sh' > "$project_dir"/client
-echo 'echo "$@" | nc '"$IP"" ""$port" >> "$project_dir"/client
+gen "client" "$IP" "$port"
 
-chmod +x "$project_dir"/client
+debug_port=$(yq .debug_port < "$project_dir"/config.yaml)
+gen "debug-client" "$IP" "$debug_port"

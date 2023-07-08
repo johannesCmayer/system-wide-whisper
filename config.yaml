@@ -11,3 +11,4 @@ number_of_recordings_to_keep: 20
 notifier_system: desktop-notifier
 IP: 'localhost'
 port: 29349
+debug_port: 29249

@@ -1,8 +1,8 @@
 import time
 import tkinter as tk
-from PIL import Image, ImageTk
-import subprocess
 import uuid
+import subprocess
+from PIL import Image, ImageTk
 
 class MacOSAlertPopup:
     def __init__(self, title, description):
@@ -21,13 +21,14 @@ class TerminalNotifierPopup:
         self.title = title
         self.message = description
         self.icon = icon
+        self.terminal_notifier = '/opt/homebrew/bin/terminal-notifier'
         self.id = str(uuid.uuid1())
 
     def display(self):
-        subprocess.Popen(['terminal-notifier', '-title', self.title, '-message', self.message, '-group', self.id, '-contentImage', self.icon, '-appIcon', self.icon])
+        subprocess.Popen([self.terminal_notifier, '-title', self.title, '-message', self.message, '-group', self.id, '-contentImage', self.icon, '-appIcon', self.icon])
 
     def clear(self):
-        subprocess.Popen(['terminal-notifier', '-remove', self.id])
+        subprocess.Popen([self.terminal_notifier, '-remove', self.id])
 
 
 class TkinterPopup:

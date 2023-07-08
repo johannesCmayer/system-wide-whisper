@@ -1,0 +1,2 @@
+#!/bin/sh
+echo "$@" | nc localhost 29249

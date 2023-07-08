@@ -1,3 +1,7 @@
+- setup "universal remote" shortcuts for server
+- Remove file IPC
+
+Backlog
 - fix the record only option, it is currently kind of broken.
 
 SoT

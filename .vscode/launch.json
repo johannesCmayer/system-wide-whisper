@@ -6,13 +6,13 @@
     "configurations": [
         
         {
-            "name": "system-wide-whisper",
+            "name": "debug server",
             "type": "python",
             "request": "launch",
-            "program": "main.py",
+            "program": "server.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["--toggle-recording"]
+            "args": ["--debug-mode"]
         }
     ]
 }

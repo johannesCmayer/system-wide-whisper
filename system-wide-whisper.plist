@@ -4,8 +4,11 @@
 <dict>
     <key>Label</key>
     <string>system-wide-whisper</string>
-    <key>Program</key>
-    <string>/opt/homebrew/Caskroom/miniconda/base/envs/system-wide-whisper/bin/python /Users/johannes/projects/system-wide-whisper/main.py</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/Caskroom/miniconda/base/envs/system-wide-whisper/bin/python</string>
+        <string>/Users/johannes/projects/system-wide-whisper/server.py</string>
+    </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>

@@ -1,7 +1,5 @@
 import socket
 import threading
-import timeit
-program_start_time = timeit.default_timer()
 import time
 import os
 import tempfile
@@ -26,10 +24,8 @@ import soundfile as sf
 import pyaudio
 
 from popup import TkinterPopup, MacOSAlertPopup, TerminalNotifierPopup
-end_time = timeit.default_timer() - program_start_time
-print(f"Importing took {end_time} seconds")
 
-start_time = timeit.default_timer()
+program_start_time = time.time()
 
 instance_id = datetime.now().strftime("%Y%m%d%H%M%S")
 project_path = Path(os.path.dirname(__file__)).absolute()
@@ -69,30 +65,32 @@ if not config_local_path.exists():
     config_local_path.touch()
 config.update(yaml.load(config_local_path.open(), yaml.FullLoader))
 
-parser = argparse.ArgumentParser(description=f'The default config can be picewise overwritten by a config_local.yaml file placed in the project directory: {project_path}.')
-parser.add_argument('--start', action='store_true', 
+network_command_parser = argparse.ArgumentParser(exit_on_error=False, add_help=False, prog="",
+    description=f'The default config can be picewise overwritten by a config_local.yaml '
+    f'file placed in the project directory: {project_path}.')
+network_command_parser.add_argument('--start', action='store_true', 
     help='Start the recording.')
-parser.add_argument('--stop', action='store_true', 
+network_command_parser.add_argument('--stop', action='store_true', 
     help='Stop the recording and transcribe it.')
-parser.add_argument('--toggle-recording', action='store_true', 
+network_command_parser.add_argument('--toggle-recording', action='store_true', 
     help='Start the recording if it is not running, if a recording is running, stop it and transcribe it.')
-parser.add_argument('--toggle-pause', action='store_true', 
+network_command_parser.add_argument('--toggle-pause', action='store_true', 
     help='Pause/Unpause the recording.')
-parser.add_argument('--abort', action='store_true', 
+network_command_parser.add_argument('--abort', action='store_true', 
     help="Stop the recording and don't transcribe it")
-parser.add_argument('--clear-notifications', action='store_true', 
+network_command_parser.add_argument('--clear-notifications', action='store_true', 
     help='Clear all notifications')
-parser.add_argument('--no-postprocessing', action='store_true', 
+network_command_parser.add_argument('--no-postprocessing', action='store_true', 
     help="Do not process special commands. E.g. don't translate 'new line' to an actual newline.")
-parser.add_argument('--start-lowercase', action='store_true', 
+network_command_parser.add_argument('--start-lowercase', action='store_true', 
     help="The first character will be lowercase (useful for inserting text somewhere.)")
-parser.add_argument('--copy-last', action='store_true', 
+network_command_parser.add_argument('--copy-last', action='store_true', 
     help="Copy the last transcription to the clipboard.")
-parser.add_argument('--list-transcriptions', action='store_true', 
+network_command_parser.add_argument('--list-transcriptions', action='store_true', 
     help="List all past transcriptions.")
-parser.add_argument('--transcribe-last', action='store_true', 
+network_command_parser.add_argument('--transcribe-last', action='store_true', 
     help="Transcribe the last recording.")
-parser.add_argument('--transcribe-file', type=str, 
+network_command_parser.add_argument('--transcribe-file', type=str, 
     help="Transcribe a file. By default look for the transcribed files in the project directory. "
     "If the argument contains one or more slashes, it is interpreted as an path argument relative "
     "to the current working directory. E.g. `-t 2023_06_11-12_53_28.mp3` will look in the recorded "
@@ -100,23 +98,43 @@ parser.add_argument('--transcribe-file', type=str,
     "working directory, and transcribe that. `-t /home/user/recordings/2023_06_11-12_53_28.mp3` will look "
     "for a file '2023_06_11-12_53_28.mp3' in the directory '/home/user/memo.mp3' or '~/memo.mp3' will look "
     "for a file 'memo.mp3' in the home directory, and transcribe that.")
-parser.add_argument('--list-recordings', action='store_true', 
+network_command_parser.add_argument('--list-recordings', action='store_true', 
     help="List the paths of recorded audio.")
-parser.add_argument('--only-record', action='store_true', 
+network_command_parser.add_argument('--only-record', action='store_true', 
     help="Only record, don't transcribe.")
-parser.add_argument('--clipboard', action='store_true', 
+network_command_parser.add_argument('--clipboard', action='store_true', 
     help="Don't paste, only copy to clipboard.")
-parser.add_argument('--config', action='store_true', 
+network_command_parser.add_argument('--config', action='store_true', 
     help="Edit the config file.")
-parser.add_argument('--voice-announcements', action='store_true', 
+network_command_parser.add_argument('--voice-announcements', action='store_true', 
     help="Speak outloud a notification for when recording starts and ends, and similar events such as pausing.")
-args = parser.parse_args()
+network_command_parser.add_argument('--shutdown', action='store_true', 
+    help="Shutdown the server. Note that this might cause the server to restart, if it is setup as a service "
+    "and the service is configured to restart automatically.")
+network_command_parser.add_argument('--status', action='store_true', 
+    help="Show the status of the server.")
+network_command_parser.add_argument('--test-error', action='store_true', 
+    help="Raise an error in the network argument branching section for testing purposes.")
+
+cli_parser = argparse.ArgumentParser(
+    description='This is the CLI for the system-wide-whisper server. The client CLI is separate, '
+                'and can be viewed with --help-client with the server prgram, or from the client.')
+cli_parser.add_argument('--debug-mode', action='store_true', 
+                        help='Run the server in a terminal instead of as a service, '
+                        'in a way that also allows to run the service in the background. '
+                        'This works by using a different port. Use debug-client to connect '
+                        'to this instance.')
+cli_parser.add_argument('--help-client', action='store_true', 
+                        help='Show the help message for the client.')
+cli_args = cli_parser.parse_args()
+
+if cli_args.help_client:
+    network_command_parser.print_help()
+    exit()
 
 if config['notifier_system'] == 'desktop-notifier':
     notifier = DesktopNotifier()
 
-end_time = timeit.default_timer() - start_time
-print(f"Setup took {end_time} seconds")
 
 # Setup the pyaudio recording stream
 p = pyaudio.PyAudio()
@@ -173,20 +191,20 @@ def X_paste_text(text):
     clipboard_contents = X_get_clipboard()
     #subprocess.run(['xdotool', 'type', text])
     program = subprocess.check_output(["ps -e | grep $(xdotool getwindowpid $(xdotool getwindowfocus)) | grep -v grep | awk '{print $4}'"], shell=True).decode().strip()
-    subprocess.run(['xclip', '-selection', 'primary'], input=text.encode())
+    subprocess.run(['xclip', '-selection', 'primary'], input=text.encode(), check=True)
     print('program is: ' + program)
     if program.lower() == 'emacs':
-        subprocess.run(['xclip', '-selection', 'clipboard'], input=(text+" ").encode())
+        subprocess.run(['xclip', '-selection', 'clipboard'], input=(text+" ").encode(), check=True)
         subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'P'])
     elif program.lower() == 'discord':
-        subprocess.run(['xclip', '-selection', 'clipboard'], input=(text+" ").encode())
-        subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'])
+        subprocess.run(['xclip', '-selection', 'clipboard'], input=(text+" ").encode(), check=True)
+        subprocess.run(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'], check=True)
         time.sleep(1)
     else:
-        subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode())
-        subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'])
+        subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode(), check=True)
+        subprocess.run(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'], check=True)
         time.sleep(0.25)
-    subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents.encode())
+    subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents.encode(), check=True)
 
 def pyperclip_paste_text(text):
     orig_clipboard = pyperclip.paste()
@@ -198,7 +216,10 @@ def pyperclip_paste_text(text):
     if orig_clipboard:
         pyperclip.copy(orig_clipboard)
 
-def paste_text(text):
+def paste_text(args, text):
+    """Paste the text into the current window, at the current cursor position.
+    This function selects the appropriate method for the current platform, and
+    Application."""
     if args.clipboard:
         pyperclip.copy(text)
     elif sys.platform == 'linux':
@@ -207,6 +228,7 @@ def paste_text(text):
         pyperclip_paste_text(text)
                 
 def text_substitution(s):
+    """Perform text substitutions on the string s, e.g. transcibing things like 'new line' to '\n'."""
     format_commands = [
         (['new', 'line'], '\n'),
         (['new', 'paragraph'], '\n\n'),
@@ -304,8 +326,7 @@ def text_substitution(s):
 
     return s
 
-def process_transcription(text):
-    start_time = timeit.default_timer()
+def process_transcription(args, text):
     text = text.strip()
     text = text.replace('\n', ' ')
     if not args.no_postprocessing:
@@ -320,8 +341,6 @@ def process_transcription(text):
     text = re.sub("[Tt]hank [Yy]ou\. ?$", "", text)
     text = re.sub(". \)", ".\)", text)
     text = re.sub("[,.!?]:", ":", text)
-    end_time = timeit.default_timer() - start_time
-    print(f"Text postprocessing took {end_time} seconds")
     return text
 
 def openai_transcibe(mp3_path):
@@ -329,6 +348,8 @@ def openai_transcibe(mp3_path):
     return out.text
 
 async def push_notification(title, message, icon):
+    """Push a persistent notification to the user, which stays until it is programmatically cleared.
+    @return: a notification object with which can be cleared with clear_notification"""
     if config['notifier_system'] == 'terminal-notifier':
         n = TerminalNotifierPopup(title=title, description=message, icon=icon)
         n.display()
@@ -345,13 +366,15 @@ async def push_notification(title, message, icon):
         raise Exception('Notifier system not supported')
 
 async def clear_notification(notification):
+    """Clear a notification that was pushed with push_notification"""
     if config['notifier_system'] == 'desktop-notifier':
         await notifier.clear(notification)
     else:
         notification.clear()
 
-async def record():
-    start_time = timeit.default_timer()
+async def record() -> str:
+    """Record audio and save it to an mp3 file.
+    @return: path to the mp3 file"""
     stop_signal_file.unlink(missing_ok=True)
     pause_signal_file.unlink(missing_ok=True)
     abort_signal_file.unlink(missing_ok=True)
@@ -363,10 +386,6 @@ async def record():
     frames = []  # Initialize array to store frames
     n_pause = None
     global speak_proc
-    end_time = timeit.default_timer() - start_time
-    print(f"Recording setup took {end_time} seconds")
-    program_start_to_record_time = timeit.default_timer() - program_start_time
-    print(f"Program start to record time took {program_start_to_record_time} seconds")
     stream.start_stream()
     while not (abort_signal_file.exists() or stop_signal_file.exists()):
         data = stream.read(chunk)
@@ -385,7 +404,6 @@ async def record():
                     n_pause = await push_notification("Paused Recording", "Paused Recording", pause_icon)
     stream.stop_stream()
 
-    start_time = timeit.default_timer()
     if n_pause:
         await clear_notification(n_pause)
     if n1:
@@ -394,10 +412,7 @@ async def record():
     stop_signal_file.unlink(missing_ok=True)
 
     f_print('Finished recording')
-    end_time = timeit.default_timer() - start_time
-    print(f"Recording cleanup took {end_time} seconds")
 
-    start_time = timeit.default_timer()
     # Save the recorded data as a WAV file
     mp3_path = f"{audio_path}/{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.mp3"
     global fs
@@ -415,8 +430,6 @@ async def record():
         f_print('saving mp3')
         data, fs = sf.read(wav_path) 
         sf.write(mp3_path, data, fs)
-    end_time = timeit.default_timer() - start_time
-    print(f"Converting and saving mp3 took {end_time} seconds")
 
     print(mp3_path)
 
@@ -427,11 +440,10 @@ async def record():
 
     return mp3_path
 
-async def transcribe(mp3_path):
-    start_time = timeit.default_timer()
+async def transcribe(args, mp3_path):
     n2 = await push_notification("Processing", "Processing", icon=processing_icon)
     out = openai_transcibe(mp3_path)
-    out = process_transcription(out)
+    out = process_transcription(args, out)
     f_print("transcription:", out)
 
     with transcription_file.open('a') as f:
@@ -440,8 +452,6 @@ async def transcribe(mp3_path):
         f.write(out)
 
     await clear_notification(n2)
-    end_time = timeit.default_timer() - start_time
-    print(f"Transcribing took {end_time} seconds")
     return out
 
 
@@ -456,11 +466,11 @@ def aquire_lock():
                 locks.remove(l)
         time.sleep(0.1)
 
-async def asr_pipeline():
+async def asr_pipeline(args):
     mp3_path = await record()
-    text = await transcribe(mp3_path)
+    text = await transcribe(args, mp3_path)
     aquire_lock()
-    paste_text(text)
+    paste_text(args, text)
     instance_lock_path.unlink(missing_ok=True)
 
 def trim_audio_files():
@@ -474,14 +484,14 @@ def trim_audio_files():
 # basically seems that there is no error actually happening of picking up the speak commands in the transcriptions so far 
 # TODO: I should probably remove this at some point. 
 speak_proc = None
-def speak(text):
+def speak(args, text):
     if args.voice_announcements:
         global speak_proc
         speak_proc = subprocess.Popen(['gsay', text])
 
 async def argument_branching(args):
     if args.abort:
-        speak('abort')
+        speak(args, 'abort')
         abort_signal_file.touch()
     elif args.only_record:
         mp3_path = await record()
@@ -525,16 +535,16 @@ async def argument_branching(args):
     #         speak('Pause')
     elif args.transcribe_last:
         mp3_path = sorted(audio_path.glob('*.mp3'))[-1]
-        text = await transcribe(mp3_path)
-        paste_text(text)
+        text = await transcribe(args, mp3_path)
+        paste_text(args, text)
     elif args.transcribe_file:
         if '/' in args.transcribe_file:
             mp3_path = args.transcribe_file
         else:
             mp3_path = audio_path / args.transcribe_file
         if mp3_path.exists():
-            text = await transcribe(mp3_path)
-            paste_text(text)
+            text = await transcribe(args, mp3_path)
+            paste_text(args, text)
         else:
             f_print(f'File {mp3_path} does not exist.')
     elif args.list_recordings:
@@ -543,52 +553,77 @@ async def argument_branching(args):
             print(f"{p}; {duration}")
     trim_audio_files()
 
-def asr_pipeline_wrapper():
-    asyncio.run(asr_pipeline())
+def asr_pipeline_wrapper(args):
+    asyncio.run(asr_pipeline(args))
+
+def send_help(conn: socket.socket):
+    help = network_command_parser.format_help()
+    conn.sendall(help.encode())
 
 def server_command_receiver():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind((config['IP'], config['port']))
+    port = config['debug_port'] if cli_args.debug_mode else config['port']
+    s.bind((config['IP'], port))
     s.listen(5)
     started = False
     while True:
         conn, addr = s.accept()
         print(f'Got connection from {addr}')
+        threads = []
         with conn:
             msg = conn.recv(1024)
             msg = msg.decode('utf-8').strip()
             print(f'Got message: {msg}')
 
-            match msg:
-                case '--abort':
-                    print(f'abort')
-                    speak('abort')
+            try:
+                network_args = network_command_parser.parse_args(msg.split())
+            except SystemExit as e:
+                send_help(conn)
+                continue
+            except argparse.ArgumentError as e:
+                send_help(conn)
+                continue
+
+            try:
+                if network_args.abort:
+                    print('abort')
+                    speak(network_args, 'abort')
                     abort_signal_file.touch()
-                case '--toggle-recording':
-                    print(f'tr')
+                elif network_args.toggle_recording:
+                    print('toggle recording')
                     if started:
                         stop_signal_file.touch()
                         running_signal_file.unlink()
-                        speak('Stop')
+                        speak(network_args, 'Stop')
                         started = False
                     else:
-                        threading.Thread(target=asr_pipeline_wrapper).start()
+                        threads.append(threading.Thread(
+                            target=asr_pipeline_wrapper, args=(network_args,)).start())
                         running_signal_file.touch()
                         started = True
-                case '--toggle-pause':
+                elif network_args.toggle_pause:
                     if pause_signal_file.exists():
                         pause_signal_file.unlink()
-                        speak('Unpause')
+                        speak(network_args, 'Unpause')
                     else:
                         pause_signal_file.touch()
-                        speak('Pause')
-                case '--help':
-                    help = parser.format_help()
-                    conn.sendall(help.encode())
-                case _ as text:
-                    response = f'{text} is not a valid command'
-                    print(response)
-                    conn.sendall(response.encode())
+                        speak(network_args, 'Pause')
+                elif network_args.shutdown:
+                    sys.exit(0)
+                elif network_args.status:
+                    msg = (f"Sever is running\n"
+                        f"Uptime: {time.time() - program_start_time}s\n"
+                        f"Active Threads: {threading.active_count()}\n")
+                    print(msg)
+                    conn.sendall(msg.encode())
+                elif network_args.test_error:
+                    raise Exception('Test Error')
+                else:
+                    send_help(conn)
+            except Exception as e:
+                e = '\n'.join(traceback.format_exception(e))
+                print(e)
+                conn.sendall(e.encode())
 
 async def async_wrapper():
     try:
