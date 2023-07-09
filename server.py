@@ -490,68 +490,11 @@ def speak(args, text):
         speak_proc = subprocess.Popen(['gsay', text])
 
 async def argument_branching(args):
-    if args.abort:
-        speak(args, 'abort')
-        abort_signal_file.touch()
-    elif args.only_record:
+    if args.only_record:
         mp3_path = await record()
-    elif args.config:
-        os.system(f'vi {project_path/"config.yaml"}')
-    elif args.copy_last:
-        with transcription_file.open() as f:
-            lines = f.readlines()
-        last = lines[-1]
-        pyperclip.copy(last)
-        print('copied to clipboard:', last)
-    # elif args.list_transcriptions:
-    #     with transcription_file.open() as f:
-    #         lines = f.readlines()
-    #     for line in lines:
-    #         print(line, end='')
     elif args.clear_notifications:
         if config['notifier_system'] == 'desktop-notifier':
             await notifier.clear_all()
-    # elif args.start:
-    #     running_signal_file.touch()
-    #     await asr_pipeline()
-    # elif args.stop:
-    #     stop_signal_file.touch()
-    #     running_signal_file.unlink()
-    # elif args.toggle_recording:
-    #     if not running_signal_file.exists():
-    #         speak('Record')
-    #         running_signal_file.touch()
-    #         await asr_pipeline()
-    #     else:
-    #         speak('Stop')
-    #         stop_signal_file.touch()
-    #         running_signal_file.unlink()
-    # elif args.toggle_pause:
-    #     if pause_signal_file.exists():
-    #         pause_signal_file.unlink()
-    #         speak('Unpause')
-    #     else:
-    #         pause_signal_file.touch()
-    #         speak('Pause')
-    elif args.transcribe_last:
-        mp3_path = sorted(audio_path.glob('*.mp3'))[-1]
-        text = await transcribe(args, mp3_path)
-        paste_text(args, text)
-    elif args.transcribe_file:
-        if '/' in args.transcribe_file:
-            mp3_path = args.transcribe_file
-        else:
-            mp3_path = audio_path / args.transcribe_file
-        if mp3_path.exists():
-            text = await transcribe(args, mp3_path)
-            paste_text(args, text)
-        else:
-            f_print(f'File {mp3_path} does not exist.')
-    elif args.list_recordings:
-        for p in sorted(audio_path.glob('*.mp3')):
-            duration = timedelta(seconds=int(sf.info(p).duration))
-            print(f"{p}; {duration}")
-    trim_audio_files()
 
 def asr_pipeline_wrapper(args):
     return asyncio.run(asr_pipeline(args))
@@ -601,8 +544,10 @@ def server_command_receiver():
                         speak(network_args, 'Stop')
                         started = False
                     else:
-                        threads.append(threading.Thread(
-                            target=asr_pipeline_wrapper, args=(network_args,)).start())
+                        thread = threading.Thread(
+                            target=asr_pipeline_wrapper, args=(network_args,))
+                        threads.append(thread)
+                        thread.start()
                         running_signal_file.touch()
                         started = True
                 elif network_args.toggle_pause:
@@ -624,14 +569,33 @@ def server_command_receiver():
                     mp3_path = sorted(audio_path.glob('*.mp3'))[-1]
                     thread = threading.Thread(
                         target=transcribe_wrapper, args=(network_args, mp3_path))
-                    thread.start()
                     threads.append(thread)
+                    thread.start()
+                elif network_args.list_recordings:
+                    msg = ''
+                    for p in sorted(audio_path.glob('*.mp3')):
+                        duration = timedelta(seconds=int(sf.info(p).duration))
+                        msg += f"{p}; {duration}\n"
+                    print(msg)
+                    conn.sendall(msg.encode())
                 elif network_args.status:
                     msg = (f"Sever is running\n"
                         f"Uptime: {time.time() - program_start_time}s\n"
                         f"Active Threads: {threading.active_count()}\n")
                     print(msg)
                     conn.sendall(msg.encode())
+                elif network_args.transcribe_file:
+                    if '/' in network_args.transcribe_file:
+                        mp3_path = Path(network_args.transcribe_file)
+                    else:
+                        mp3_path = audio_path / network_args.transcribe_file
+                    if mp3_path.exists():
+                        thread = threading.Thread(
+                            target=transcribe_wrapper, args=(network_args, mp3_path))
+                        threads.append(thread)
+                        thread.start()
+                    else:
+                        f_print(f'File {mp3_path} does not exist.')
                 elif network_args.test_error:
                     raise Exception('Test Error')
                 else:
@@ -640,6 +604,7 @@ def server_command_receiver():
                 e = '\n'.join(traceback.format_exception(e))
                 print(e)
                 conn.sendall(e.encode())
+            trim_audio_files()
 
 async def async_wrapper():
     try:
