@@ -593,7 +593,7 @@ def server_command_receiver():
                     print('toggle recording')
                     if started:
                         stop_signal_file.touch()
-                        running_signal_file.unlink()
+                        running_signal_file.unlink(missing_ok=True)
                         speak(network_args, 'Stop')
                         started = False
                     else:
