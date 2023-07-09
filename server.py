@@ -480,21 +480,11 @@ def trim_audio_files():
         for p in audio_paths[:-records_to_keep]:
             p.unlink()
 
-# LOL this doesn't actually work at all because I'm killing this process off that spawns this big command right now. 
-# basically seems that there is no error actually happening of picking up the speak commands in the transcriptions so far 
-# TODO: I should probably remove this at some point. 
 speak_proc = None
 def speak(args, text):
     if args.voice_announcements:
         global speak_proc
         speak_proc = subprocess.Popen(['gsay', text])
-
-async def argument_branching(args):
-    if args.only_record:
-        mp3_path = await record()
-    elif args.clear_notifications:
-        if config['notifier_system'] == 'desktop-notifier':
-            await notifier.clear_all()
 
 def asr_pipeline_wrapper(args):
     return asyncio.run(asr_pipeline(args))

@@ -2,6 +2,10 @@
 - remove all cruft
 - setup "universal remote" shortcuts for server
 - Remove file IPC
+- Either use only async or make desktop notifier use a thread wrapper
+- Fix notifications sometimes not getting dismissed
+- Refactor global variables
+- Improve the locking and queuing mechanisms for making sure that a transcription is only pasted after the previous transcription has been pasted.
 
 Backlog
 - fix the record only option, it is currently kind of broken.
