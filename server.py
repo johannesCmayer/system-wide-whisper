@@ -503,11 +503,11 @@ async def argument_branching(args):
         last = lines[-1]
         pyperclip.copy(last)
         print('copied to clipboard:', last)
-    elif args.list_transcriptions:
-        with transcription_file.open() as f:
-            lines = f.readlines()
-        for line in lines:
-            print(line, end='')
+    # elif args.list_transcriptions:
+    #     with transcription_file.open() as f:
+    #         lines = f.readlines()
+    #     for line in lines:
+    #         print(line, end='')
     elif args.clear_notifications:
         if config['notifier_system'] == 'desktop-notifier':
             await notifier.clear_all()
@@ -554,7 +554,11 @@ async def argument_branching(args):
     trim_audio_files()
 
 def asr_pipeline_wrapper(args):
-    asyncio.run(asr_pipeline(args))
+    return asyncio.run(asr_pipeline(args))
+
+def transcribe_wrapper(args, mp3_path):
+    text = asyncio.run(transcribe(args, mp3_path))
+    paste_text(args, text)
 
 def send_help(conn: socket.socket):
     help = network_command_parser.format_help()
@@ -610,6 +614,18 @@ def server_command_receiver():
                         speak(network_args, 'Pause')
                 elif network_args.shutdown:
                     sys.exit(0)
+                elif network_args.list_transcriptions:
+                    with transcription_file.open() as f:
+                        lines = f.readlines()
+                    for line in lines:
+                        print(line, end='')
+                    conn.sendall(''.join(lines).encode())
+                elif network_args.transcribe_last:
+                    mp3_path = sorted(audio_path.glob('*.mp3'))[-1]
+                    thread = threading.Thread(
+                        target=transcribe_wrapper, args=(network_args, mp3_path))
+                    thread.start()
+                    threads.append(thread)
                 elif network_args.status:
                     msg = (f"Sever is running\n"
                         f"Uptime: {time.time() - program_start_time}s\n"
