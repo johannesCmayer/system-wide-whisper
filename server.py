@@ -498,10 +498,12 @@ def send_help(conn: socket.socket):
     conn.sendall(help.encode())
 
 def argument_branching(network_args, server_state, conn):
+    """Handle the network arguments and execute the appropriate functionality. """
     if network_args.abort:
         print('abort')
         speak(network_args, 'abort')
         abort_signal_file.touch()
+        server_state['recording_started'] = False
     elif network_args.toggle_recording:
         print('toggle recording')
         if server_state['recording_started']:
@@ -568,6 +570,7 @@ def argument_branching(network_args, server_state, conn):
         send_help(conn)
 
 def server_command_receiver():
+    """The main server loop that listens for network_args and then passes the commands to the argument branching function. """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     port = config['debug_port'] if cli_args.debug_mode else config['port']
     s.bind((config['IP'], port))
