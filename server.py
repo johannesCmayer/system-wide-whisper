@@ -454,7 +454,6 @@ async def transcribe(args, mp3_path):
     await clear_notification(n2)
     return out
 
-
 def aquire_lock():
     locks = list(lock_path.iterdir())
     instance_lock_path.touch()
