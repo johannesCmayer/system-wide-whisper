@@ -448,7 +448,7 @@ async def transcribe(args, mp3_path):
 
     with transcription_file.open('a') as f:
         f.write('\n')
-        f.write('====================================\n')
+        f.write(f'>>> {mp3_path} >>>\n')
         f.write(out)
 
     await clear_notification(n2)
