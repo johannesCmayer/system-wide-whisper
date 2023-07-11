@@ -1,9 +1,10 @@
+# Set to null to allow system to transcribe all languages.
 input_language: null
 model: whisper-1
 
 # How long to wait for the pasting of text to complete before
 # restoring the original clipboard state. Only used for pyperclip.
-paste_wait: 0.001
+paste_wait: 0.01
 number_of_recordings_to_keep: 40
 notifier_system: desktop-notifier
 IP: 'localhost'
