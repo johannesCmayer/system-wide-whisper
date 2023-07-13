@@ -4,7 +4,7 @@ model: whisper-1
 
 # How long to wait for the pasting of text to complete before
 # restoring the original clipboard state. Only used for pyperclip.
-paste_wait: 0.01
+paste_wait: 0.1
 number_of_recordings_to_keep: 40
 notifier_system: desktop-notifier
 IP: 'localhost'

@@ -337,10 +337,13 @@ def process_transcription(args, text):
         elif len(text) == 1:
             text = text[0].lower()
     text = re.sub("\\'", "'", text)
-    text += ' '
-    text = re.sub("[Tt]hank [Yy]ou\. ?$", "", text)
+    text = re.sub("thank you\. ?$", "", text, flags=re.IGNORECASE)
     text = re.sub(". \)", ".\)", text)
     text = re.sub("[,.!?]:", ":", text)
+    # Add a space after the text such that the cursor is at the correct 
+    # position to again insert the next piece of transcribed text. 
+    text.rstrip()
+    text += ' '
     return text
 
 def openai_transcibe(mp3_path):
