@@ -382,6 +382,18 @@ async def record() -> str:
     pause_signal_file.unlink(missing_ok=True)
     abort_signal_file.unlink(missing_ok=True)
 
+    global stream
+    global fs
+    # The OS is sometimes closing the stream, maybe when it is active to long, so we need
+    # to reopen it if it is not active.
+    if not stream.is_active():
+        stream = p.open(format=sample_format,
+                        channels=channels,
+                        rate=fs,
+                        frames_per_buffer=chunk, 
+                        input=True,
+                        start=False)
+
     f_print('Recording')
     n1 = await push_notification("Recording for Whisper", "Recording for Whisper", record_icon)
 
@@ -418,7 +430,6 @@ async def record() -> str:
 
     # Save the recorded data as a WAV file
     mp3_path = f"{audio_path}/{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.mp3"
-    global fs
     with tempfile.TemporaryDirectory() as tmp_dir:
         wav_path = f"{tmp_dir}/temp.wav"
         f_print('saving wav')
