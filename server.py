@@ -386,7 +386,16 @@ async def record() -> str:
     global fs
     # The OS is sometimes closing the stream, maybe when it is active to long, so we need
     # to reopen it if it is not active.
-    if not stream.is_active():
+    try:
+        active = stream.is_active()
+        if not active:
+            stream = p.open(format=sample_format,
+                            channels=channels,
+                            rate=fs,
+                            frames_per_buffer=chunk, 
+                            input=True,
+                            start=False)
+    except OSError:
         stream = p.open(format=sample_format,
                         channels=channels,
                         rate=fs,
