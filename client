@@ -1,2 +1,2 @@
 #!/bin/sh
-echo "$@" | nc localhost 29349
+echo --working-dir $(pwd) "$@" | nc localhost 29349

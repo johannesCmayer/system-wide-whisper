@@ -1,3 +1,4 @@
+import shlex
 import socket
 import threading
 import time
@@ -22,6 +23,7 @@ from pynput.keyboard import Key, Controller
 import asyncio
 import soundfile as sf
 import pyaudio
+import ffmpeg
 
 from popup import TkinterPopup, MacOSAlertPopup, TerminalNotifierPopup
 
@@ -90,7 +92,7 @@ network_command_parser.add_argument('--list-transcriptions', action='store_true'
     help="List all past transcriptions.")
 network_command_parser.add_argument('--transcribe-last', action='store_true', 
     help="Transcribe the last recording.")
-network_command_parser.add_argument('--transcribe-file', type=str, 
+network_command_parser.add_argument('--transcribe-file', type=Path, 
     help="Transcribe a file. By default look for the transcribed files in the project directory. "
     "If the argument contains one or more slashes, it is interpreted as an path argument relative "
     "to the current working directory. E.g. `-t 2023_06_11-12_53_28.mp3` will look in the recorded "
@@ -115,6 +117,8 @@ network_command_parser.add_argument('--status', action='store_true',
     help="Show the status of the server.")
 network_command_parser.add_argument('--test-error', action='store_true', 
     help="Raise an error in the network argument branching section for testing purposes.")
+network_command_parser.add_argument('--working-dir', type=Path, required=True,
+    help='The working directory to use for file operations. This would normally be set automatically be the client.')
 
 cli_parser = argparse.ArgumentParser(
     description='This is the CLI for the system-wide-whisper server. The client CLI is separate, '
@@ -138,7 +142,7 @@ if config['notifier_system'] == 'desktop-notifier':
 
 # Setup the pyaudio recording stream
 p = pyaudio.PyAudio()
-chunk = 1024  # Record in chunks of 1024 samples
+chunk = 1024*4  # Record in chunks of 1024 samples
 sample_format = pyaudio.paInt16  # 16 bits per sample
 channels = 1
 fs = 44100  # Record at 44100 samples per second
@@ -511,13 +515,34 @@ def speak(args, text):
 def asr_pipeline_wrapper(args):
     return asyncio.run(asr_pipeline(args))
 
-def transcribe_wrapper(args, mp3_path):
+def transcribe_wrapper(args, mp3_path, delete_file=False):
     text = asyncio.run(transcribe(args, mp3_path))
     paste_text(args, text)
+    if delete_file:
+        mp3_path.unlink()
 
 def send_help(conn: socket.socket):
     help = network_command_parser.format_help()
     conn.sendall(help.encode())
+
+def resolve_file(network_args, file_path):
+    file_path = Path(file_path)
+    if file_path.is_absolute():
+        return file_path
+    file_path = (network_args.working_dir / file_path).resolve()
+    if file_path.exists():
+        return file_path
+    else:
+        return audio_path / network_args.transcribe_file
+    
+def generate_mp3(input_file: Path, output_file: Path) -> Path:
+    input_file, output_file = str(input_file), str(output_file) # type: ignore
+    print(input_file, output_file)
+    stream = ffmpeg.input(input_file)
+    stream = ffmpeg.output(stream, output_file)
+    stream = ffmpeg.overwrite_output(stream)
+    ffmpeg.run(stream)
+    return Path(output_file)
 
 def argument_branching(network_args, server_state, conn):
     """Handle the network arguments and execute the appropriate functionality. """
@@ -556,9 +581,9 @@ def argument_branching(network_args, server_state, conn):
             print(line, end='')
         conn.sendall(''.join(lines).encode())
     elif network_args.transcribe_last:
-        mp3_path = sorted(audio_path.glob('*.mp3'))[-1]
+        transcription_target = sorted(audio_path.glob('*.mp3'))[-1]
         thread = threading.Thread(
-            target=transcribe_wrapper, args=(network_args, mp3_path))
+            target=transcribe_wrapper, args=(network_args, transcription_target))
         server_state['threads'].append(thread)
         thread.start()
     elif network_args.list_recordings:
@@ -575,17 +600,18 @@ def argument_branching(network_args, server_state, conn):
         print(msg)
         conn.sendall(msg.encode())
     elif network_args.transcribe_file:
-        if '/' in network_args.transcribe_file:
-            mp3_path = Path(network_args.transcribe_file)
-        else:
-            mp3_path = audio_path / network_args.transcribe_file
-        if mp3_path.exists():
+        transcription_target = resolve_file(network_args, network_args.transcribe_file)
+        print(f"transcription_target: {transcription_target=}")
+        if transcription_target.suffix == '.mp3':
             thread = threading.Thread(
-                target=transcribe_wrapper, args=(network_args, mp3_path))
-            server_state['threads'].append(thread)
-            thread.start()
+                target=transcribe_wrapper, args=(network_args, transcription_target.name))
         else:
-            f_print(f'File {mp3_path} does not exist.')
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+            transcription_target = generate_mp3(network_args.transcribe_file, Path(tmp.name))
+            thread = threading.Thread(
+                target=transcribe_wrapper, args=(network_args, transcription_target), kwargs={'delete_file': True})
+        server_state['threads'].append(thread)
+        thread.start()
     elif network_args.test_error:
         raise Exception('Test Error')
     else:
@@ -609,11 +635,13 @@ def server_command_receiver():
             print(f'Got message: {msg}')
 
             try:
-                network_args = network_command_parser.parse_args(msg.split())
+                network_args = network_command_parser.parse_args(shlex.split(msg))
             except SystemExit as e:
+                conn.sendall(traceback.format_exc(e).encode())
                 send_help(conn)
                 continue
             except argparse.ArgumentError as e:
+                conn.sendall(traceback.format_exc(e).encode())
                 send_help(conn)
                 continue
 
@@ -636,4 +664,3 @@ if __name__ == '__main__':
     except Exception as e:
         traceback.print_exc(file=debug_log_path.open('a'))
         raise e
-

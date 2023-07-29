@@ -7,3 +7,4 @@ asyncio
 soundfile
 pyaudio
 numpy
+ffmpeg-python

@@ -14,8 +14,13 @@
     <key>KeepAlive</key>
     <true/>
     <key>StandardErrorPath</key>
-    <string>/tmp/mycommand.err</string>
+    <string>/tmp/system-wide-whisper.err</string>
     <key>StandardOutPath</key>
-    <string>/tmp/mycommand.out</string>
+    <string>/tmp/system-wide-whisper.out</string>
+<key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
 </dict>
 </plist>

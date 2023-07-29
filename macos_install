@@ -1,0 +1,6 @@
+#!/bin/sh
+cp ~/projects/system-wide-whisper/system-wide-whisper.plist ~/Library/LaunchAgents/system-wide-whisper.plist
+launchctl stop system-wide-whisper
+launchctl unload ~/Library/LaunchAgents/system-wide-whisper.plist
+launchctl load ~/Library/LaunchAgents/system-wide-whisper.plist
+launchctl start system-wide-whisper
