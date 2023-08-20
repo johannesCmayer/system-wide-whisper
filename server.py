@@ -63,9 +63,8 @@ config = yaml.load((project_path / 'config.yaml').open(), yaml.FullLoader)
 
 # Load the local config to overwrite defaults if it exists
 config_local_path = project_path / 'config_local.yaml'
-if not config_local_path.exists(): 
-    config_local_path.touch()
-config.update(yaml.load(config_local_path.open(), yaml.FullLoader))
+if config_local_path.exists(): 
+    config.update(yaml.load(config_local_path.open(), yaml.FullLoader))
 
 network_command_parser = argparse.ArgumentParser(exit_on_error=False, add_help=False, prog="",
     description=f'The default config can be picewise overwritten by a config_local.yaml '
@@ -135,9 +134,6 @@ cli_args = cli_parser.parse_args()
 if cli_args.help_client:
     network_command_parser.print_help()
     exit()
-
-if config['notifier_system'] == 'desktop-notifier':
-    notifier = DesktopNotifier()
 
 
 # Setup the pyaudio recording stream
@@ -364,7 +360,8 @@ async def push_notification(title, message, icon):
     elif config['notifier_system'] == 'tkinter':
         return TkinterPopup("Recording for Whisper", "Recording for Whisper", 100, 100, 100, 100, icon)
     elif config['notifier_system'] == 'desktop-notifier':
-        return await notifier.send(title="Recording for Whisper", urgency=Urgency.Critical, message="", attachment=record_icon)
+        notifier = DesktopNotifier()
+        return (notifier, await notifier.send(title="Recording for Whisper", urgency=Urgency.Critical, message="", attachment=record_icon))
     elif config['notifier_system'] == 'macos-alert':
         x = MacOSAlertPopup(title=title, description=message)
         x.display()
@@ -375,6 +372,7 @@ async def push_notification(title, message, icon):
 async def clear_notification(notification):
     """Clear a notification that was pushed with push_notification"""
     if config['notifier_system'] == 'desktop-notifier':
+        notifier, notification = notification
         await notifier.clear(notification)
     else:
         notification.clear()
@@ -620,39 +618,42 @@ def argument_branching(network_args, server_state, conn):
 def server_command_receiver():
     """The main server loop that listens for network_args and then passes the commands to the argument branching function. """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    port = config['debug_port'] if cli_args.debug_mode else config['port']
-    s.bind((config['IP'], port))
-    s.listen(5)
-    server_state = {'recording_started': False, 'threads': []}
-    while True:
-        print('Waiting for connection')
-        conn, addr = s.accept()
-        print(f'Got connection from {addr}')
-        with conn:
-            server_state['threads'] = [t for t in server_state['threads'] if t.is_alive()]
-            msg = conn.recv(1024)
-            msg = msg.decode('utf-8').strip()
-            print(f'Got message: {msg}')
+    try:
+        port = config['debug_port'] if cli_args.debug_mode else config['port']
+        s.bind((config['IP'], port))
+        s.listen(5)
+        server_state = {'recording_started': False, 'threads': []}
+        while True:
+            print('Waiting for connection')
+            conn, addr = s.accept()
+            print(f'Got connection from {addr}')
+            with conn:
+                server_state['threads'] = [t for t in server_state['threads'] if t.is_alive()]
+                msg = conn.recv(1024)
+                msg = msg.decode('utf-8').strip()
+                print(f'Got message: {msg}')
 
-            try:
-                network_args = network_command_parser.parse_args(shlex.split(msg))
-            except SystemExit as e:
-                conn.sendall(traceback.format_exc(e).encode())
-                send_help(conn)
-                continue
-            except argparse.ArgumentError as e:
-                conn.sendall(traceback.format_exc(e).encode())
-                send_help(conn)
-                continue
+                try:
+                    network_args = network_command_parser.parse_args(shlex.split(msg))
+                except SystemExit as e:
+                    conn.sendall(traceback.format_exc(e).encode())
+                    send_help(conn)
+                    continue
+                except argparse.ArgumentError as e:
+                    conn.sendall(traceback.format_exc(e).encode())
+                    send_help(conn)
+                    continue
 
-            try:
-                argument_branching(network_args, server_state, conn)
-            except Exception as e:
-                e = '\n'.join(traceback.format_exception(e))
-                print(e)
-                conn.sendall(e.encode())
+                try:
+                    argument_branching(network_args, server_state, conn)
+                except Exception as e:
+                    e = '\n'.join(traceback.format_exception(e))
+                    print(e)
+                    conn.sendall(e.encode())
 
-            trim_audio_files()
+                trim_audio_files()
+    finally:
+        s.close()
 
 @atexit.register
 def cleanup():
