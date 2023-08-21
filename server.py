@@ -361,7 +361,7 @@ async def push_notification(title, message, icon):
         return TkinterPopup("Recording for Whisper", "Recording for Whisper", 100, 100, 100, 100, icon)
     elif config['notifier_system'] == 'desktop-notifier':
         notifier = DesktopNotifier()
-        return (notifier, await notifier.send(title="Recording for Whisper", urgency=Urgency.Critical, message="", attachment=record_icon))
+        return (notifier, await notifier.send(title=title, urgency=Urgency.Critical, message=message, attachment=icon))
     elif config['notifier_system'] == 'macos-alert':
         x = MacOSAlertPopup(title=title, description=message)
         x.display()
