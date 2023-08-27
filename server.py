@@ -1,3 +1,4 @@
+import io
 import shlex
 import socket
 import threading
@@ -17,6 +18,7 @@ import traceback
 
 import openai
 import yaml
+from contextlib import redirect_stderr, redirect_stdout
 from desktop_notifier import DesktopNotifier, Urgency
 import pyperclip
 from pynput.keyboard import Key, Controller
@@ -605,7 +607,7 @@ def argument_branching(network_args, server_state, conn):
                 target=transcribe_wrapper, args=(network_args, transcription_target.name))
         else:
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-            transcription_target = generate_mp3(network_args.transcribe_file, Path(tmp.name))
+            transcription_target = generate_mp3(transcription_target, Path(tmp.name))
             thread = threading.Thread(
                 target=transcribe_wrapper, args=(network_args, transcription_target), kwargs={'delete_file': True})
         server_state['threads'].append(thread)
@@ -614,6 +616,45 @@ def argument_branching(network_args, server_state, conn):
         raise Exception('Test Error')
     else:
         send_help(conn)
+
+def connection_processor(conn, server_state):
+    with conn:
+        server_state['threads'] = [t for t in server_state['threads'] if t.is_alive()]
+        msg = conn.recv(1024)
+        msg = msg.decode('utf-8').strip()
+        print(f'Got message: {msg}')
+
+        network_args = shlex.split(msg)
+
+        if '-h' in network_args or '--help' in network_args:
+            send_help(conn)
+            return
+
+        def propagate_messages(f):
+            out = f.getvalue()
+            print(out)
+            conn.sendall(out.encode())
+
+        f = io.StringIO()
+        with redirect_stdout(f):
+            with redirect_stderr(f):
+                try:
+                    network_args = network_command_parser.parse_args(network_args)
+                except SystemExit as e:
+                    propagate_messages(f)
+                    return
+                except argparse.ArgumentError as e:
+                    propagate_messages(f)
+                    return
+
+        try:
+            argument_branching(network_args, server_state, conn)
+        except Exception as e:
+            e = '\n'.join(traceback.format_exception(e))
+            print(e)
+            conn.sendall(e.encode())
+
+        trim_audio_files()
 
 def server_command_receiver():
     """The main server loop that listens for network_args and then passes the commands to the argument branching function. """
@@ -627,31 +668,8 @@ def server_command_receiver():
             print('Waiting for connection')
             conn, addr = s.accept()
             print(f'Got connection from {addr}')
-            with conn:
-                server_state['threads'] = [t for t in server_state['threads'] if t.is_alive()]
-                msg = conn.recv(1024)
-                msg = msg.decode('utf-8').strip()
-                print(f'Got message: {msg}')
-
-                try:
-                    network_args = network_command_parser.parse_args(shlex.split(msg))
-                except SystemExit as e:
-                    conn.sendall(traceback.format_exc(e).encode())
-                    send_help(conn)
-                    continue
-                except argparse.ArgumentError as e:
-                    conn.sendall(traceback.format_exc(e).encode())
-                    send_help(conn)
-                    continue
-
-                try:
-                    argument_branching(network_args, server_state, conn)
-                except Exception as e:
-                    e = '\n'.join(traceback.format_exception(e))
-                    print(e)
-                    conn.sendall(e.encode())
-
-                trim_audio_files()
+            t = threading.Thread(target=connection_processor, args=[conn, server_state])
+            t.start()
     finally:
         s.close()
 

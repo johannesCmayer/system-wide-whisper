@@ -9,7 +9,7 @@ gen () {
     IP=$2
     port=$3
     echo '#!/bin/sh' > "$project_dir"/"$program_name"
-    echo 'echo --working-dir $(pwd) "$@" | nc '"$IP"" ""$port" >> "$project_dir"/"$program_name"
+    echo "printf \"\\\"%s\\\" \" --working-dir \"\$(pwd)\" \"\$@\" | nc $IP $port" >> "$project_dir"/"$program_name"
 
     chmod +x "$project_dir"/"$program_name"
 }
