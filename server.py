@@ -107,6 +107,8 @@ network_command_parser.add_argument('--only-record', action='store_true',
     help="Only record, don't transcribe.")
 network_command_parser.add_argument('--clipboard', action='store_true', 
     help="Don't paste, only copy to clipboard.")
+network_command_parser.add_argument('--no-insertion', action='store_true', 
+    help="Transcribe but don't paste or copy to clipboard")
 network_command_parser.add_argument('--config', action='store_true', 
     help="Edit the config file.")
 network_command_parser.add_argument('--voice-announcements', action='store_true', 
@@ -222,6 +224,8 @@ def paste_text(args, text):
     """Paste the text into the current window, at the current cursor position.
     This function selects the appropriate method for the current platform, and
     Application."""
+    if args.no_insertion:
+        return
     if args.clipboard:
         pyperclip.copy(text)
     elif sys.platform == 'linux':
@@ -544,6 +548,12 @@ def generate_mp3(input_file: Path, output_file: Path) -> Path:
     ffmpeg.run(stream)
     return Path(output_file)
 
+def generate_mp3s(input_file: Path, output_dir: Path) -> Path:
+    input_file, output_dir = str(input_file), str(output_dir) # type: ignore
+    print(input_file, output_dir)
+    subprocess.run(['ffmpeg', '-i', input_file, '-f', 'segment', '-segment_time', '3', f'{output_dir}/out%03d.mp3'])
+    return Path(output_dir)
+
 def argument_branching(network_args, server_state, conn):
     """Handle the network arguments and execute the appropriate functionality. """
     if network_args.abort:
@@ -656,7 +666,7 @@ def connection_processor(conn, server_state):
 
         trim_audio_files()
 
-def server_command_receiver():
+def connection_acceptor():
     """The main server loop that listens for network_args and then passes the commands to the argument branching function. """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -679,7 +689,7 @@ def cleanup():
 
 if __name__ == '__main__':
     try:
-        server_command_receiver()
+        connection_acceptor()
     except Exception as e:
         traceback.print_exc(file=debug_log_path.open('a'))
         raise e
