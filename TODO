@@ -1,3 +1,7 @@
+- Make the abort command actually work robustly
+    - Set an abort timestamp that every thread can then check.
+- Split long files based on silence
+
 - Save server state in a better object (maybe named tuple?)
 - Understand thread printing and error handeling in python
 - Get better error logging for threads

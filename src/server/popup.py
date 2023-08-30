@@ -1,3 +1,4 @@
+import logging
 import time
 import tkinter as tk
 import uuid
@@ -14,6 +15,31 @@ class MacOSAlertPopup:
 
     def clear(self):
         self.p.kill()
+
+class Dzen2Popup:
+    def __init__(self, title, description):
+        self.title = title
+        self.message = description
+        self.proc = None
+
+    def display(self):
+        if 'processing' in self.title.lower():
+            color = 'green'
+        elif 'error' in self.title.lower():
+            color = 'pink'
+        elif 'pause' in self.title.lower():
+            color = 'yellow'
+        elif 'record' in self.title.lower():
+            color = 'red'
+        else:
+            color = 'white'
+        logging.debug(f'opening dzen as {color}')
+        self.proc = subprocess.Popen(['dzen2', '-p', '-bg', color, '-fg', 'black', '-y', '23'],
+                                     stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+
+    def clear(self):
+        if self.proc:
+            self.proc.kill()
 
 
 class TerminalNotifierPopup:

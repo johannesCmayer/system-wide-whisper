@@ -6,7 +6,7 @@ model: whisper-1
 # restoring the original clipboard state. Only used for pyperclip.
 paste_wait: 0.1
 number_of_recordings_to_keep: 40
-notifier_system: desktop-notifier
+notifier_system: dzen2popup
 IP: 'localhost'
 port: 29349
 debug_port: 29249
