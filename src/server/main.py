@@ -1,44 +1,40 @@
-from collections import namedtuple
-from enum import Enum
+import argparse
+import atexit
 import io
+import logging
+import os
 import shlex
 import socket
+import subprocess
+import sys
+import tempfile
 import threading
 import time
-import os
-import tempfile
-import subprocess
-from pathlib import Path
-import argparse
-import sys
-import re
-import atexit
-from typing import List, Tuple
-import wave
-from datetime import datetime, timedelta
 import traceback
-import logging
-
-import openai
-import yaml
+import wave
+from collections import namedtuple
 from contextlib import redirect_stderr, redirect_stdout
-from desktop_notifier import DesktopNotifier, Urgency
-import pyperclip
-import asyncio
-import soundfile as sf
-import pyaudio
-import ffmpeg
-from rich.logging import RichHandler
-from rich import print
+from datetime import datetime, timedelta
+from pathlib import Path
 
-from popup import Dzen2Popup, TkinterPopup, MacOSAlertPopup, TerminalNotifierPopup
+import ffmpeg
+import openai
+import pyaudio
+import soundfile as sf
+import yaml
+from config import (abort_signal_file, audio_path, config, error_icon,
+                    instance_lock_path, lock_path, pause_icon,
+                    pause_signal_file, processing_icon, program_start_time,
+                    project_path, record_icon, running_signal_file,
+                    stop_signal_file, transcription_file)
+from data_structures import ServerState, ThreadInfo, ThreadState
+from desktop_notifier import DesktopNotifier, Urgency
 from paste import paste_text
-from data_structures import ThreadState, ThreadInfo, ServerState
+from popup import (Dzen2Popup, MacOSAlertPopup, TerminalNotifierPopup,
+                   TkinterPopup)
+from rich import print
+from rich.logging import RichHandler
 from text_processing import process_transcription
-from config import (config, project_path, audio_path, transcription_file,
-    stop_signal_file, pause_signal_file, running_signal_file, abort_signal_file,
-    record_icon, pause_icon, processing_icon, error_icon, lock_path, instance_lock_path, 
-    program_start_time)
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s", datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
