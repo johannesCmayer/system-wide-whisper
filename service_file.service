@@ -1,0 +1,12 @@
+[Unit]
+    Description=A server to run in the background for processing transcription requests.
+    After=network.target
+
+    [Service]
+    ExecStart=/home/johannes/miniconda3/envs/system-wide-whisper/bin/python /home/johannes/projects/system-wide-whisper/src/server/main.py
+    User=johannes
+    Group=johannes
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target

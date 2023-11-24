@@ -26,11 +26,11 @@ def _X_paste_text(text):
     subprocess.run(['xclip', '-selection', 'primary'], input=text.encode(), check=True)
     logging.info(f'program is: {program}')
     if program.lower() == 'emacs':
-        subprocess.run(['xclip', '-selection', 'clipboard'], input=(text+" ").encode(), check=True)
-        subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'P'])
+        subprocess.run(['xclip', '-selection', 'clipboard'], input=(text+"").encode(), check=True)
+        subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'Shift+Insert'])
     elif program.lower() == 'discord':
         subprocess.run(['xclip', '-selection', 'clipboard'], input=(text+" ").encode(), check=True)
-        subprocess.run(['xdotool', 'key', '--clearmodifiers', 'ctrl+V'], check=True)
+        subprocess.run(['xdotool', 'key', '--clearmodifiers', 'Ctrl+V'], check=True)
         time.sleep(1)
     else:
         subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode(), check=True)
@@ -67,4 +67,3 @@ def paste_text(args, text, server_state):
         _X_paste_text(text)
     else:
         _pyperclip_paste_text(text)
-                
