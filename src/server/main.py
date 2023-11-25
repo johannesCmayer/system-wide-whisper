@@ -184,11 +184,14 @@ def record() -> str:
 
     global stream
     global fs
+    global p
     # The OS is sometimes closing the stream, maybe when it is active to long, so we need
     # to reopen it if it is not active.
     try:
         active = stream.is_active()
         if not active:
+            stream.stop_stream()
+            stream.close()
             stream = p.open(format=sample_format,
                             channels=channels,
                             rate=fs,
@@ -196,6 +199,10 @@ def record() -> str:
                             input=True,
                             start=False)
     except OSError:
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+        p = pyaudio.PyAudio()
         stream = p.open(format=sample_format,
                         channels=channels,
                         rate=fs,
