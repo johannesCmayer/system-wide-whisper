@@ -37,7 +37,7 @@ class Dzen2Popup:
         # Maybe use something like "xrandr | grep connected | grep -v disconnected | grep 'mm'" to automaticall determine the number of screens
         for screen_idx in range(1, 5):
             self.procs.append(subprocess.Popen(
-                ['dzen2', '-p', '-bg', color, '-fg', 'black', '-y', '23', '-h', '6', '-xs', str(screen_idx)],
+                ['dzen2', '-p', '-bg', color, '-fg', 'black', '-y', '23', '-h', '10', '-xs', str(screen_idx)],
                 stdout=subprocess.PIPE, stdin=subprocess.PIPE))
 
     def clear(self):
