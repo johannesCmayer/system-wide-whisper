@@ -20,7 +20,7 @@ class Dzen2Popup:
     def __init__(self, title, description):
         self.title = title
         self.message = description
-        self.proc = None
+        self.procs = []
 
     def display(self):
         if 'processing' in self.title.lower():
@@ -34,12 +34,15 @@ class Dzen2Popup:
         else:
             color = 'white'
         logging.debug(f'opening dzen as {color}')
-        self.proc = subprocess.Popen(['dzen2', '-p', '-bg', color, '-fg', 'black', '-y', '23'],
-                                     stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+        # Maybe use something like "xrandr | grep connected | grep -v disconnected | grep 'mm'" to automaticall determine the number of screens
+        for screen_idx in range(1, 5):
+            self.procs.append(subprocess.Popen(
+                ['dzen2', '-p', '-bg', color, '-fg', 'black', '-y', '23', '-h', '6', '-xs', str(screen_idx)],
+                stdout=subprocess.PIPE, stdin=subprocess.PIPE))
 
     def clear(self):
-        if self.proc:
-            self.proc.kill()
+        for proc in self.procs:
+            proc.kill()
 
 
 class TerminalNotifierPopup:
