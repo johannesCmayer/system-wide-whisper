@@ -139,7 +139,7 @@ def setup_api_key():
                 yaml.dump({'openai': api_key_placeholder}, f)
         openai_api_key = yaml.safe_load(open(project_path / 'api_keys.yaml'))['openai']
         if openai_api_key == api_key_placeholder:
-            logging.info("Please put your OpenAI API key in the 'api_keys.yaml' file, located at {api_key_path}")
+            logging.info(f"Please put your OpenAI API key in the 'api_keys.yaml' file, located at {api_key_path}")
             exit(1)
     openai.api_key = openai_api_key
 
