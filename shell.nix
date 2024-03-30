@@ -15,6 +15,7 @@ in pkgs.mkShell {
       python-pkgs.tkinter
       python-pkgs.pillow
       python-pkgs.rich
+      python-pkgs.xdg-base-dirs
     ]))
     pkgs.dzen2
     pkgs.xdotool

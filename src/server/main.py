@@ -17,6 +17,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import xdg_base_dirs
 import ffmpeg
 import openai
 import pyaudio
@@ -122,6 +123,9 @@ stream = p.open(format=sample_format,
                 input=True,
                 start=False)
 
+
+config_home = xdg_base_dirs.xdg_config_home() / 'system-wide-whisper'
+
 @atexit.register
 def pyaudio_cleanup():
     stream.stop_stream()
@@ -132,13 +136,10 @@ def setup_api_key():
     if 'OPENAI_API_KEY' in os.environ:
         openai_api_key = os.environ["OPENAI_API_KEY"]
     else:
-        api_key_placeholder = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-        api_key_path = (project_path / 'api_keys.yaml')
-        if not api_key_path.exists():
-            with api_key_path.open('w') as f:
-                yaml.dump({'openai': api_key_placeholder}, f)
-        openai_api_key = yaml.safe_load(open(project_path / 'api_keys.yaml'))['openai']
-        if openai_api_key == api_key_placeholder:
+        api_key_path = config_home / 'api_key.txt'
+        if api_key_path.exists():
+            openai_api_key = api_key_path.read_text().strip()
+        else:
             logging.info(f"Please put your OpenAI API key in the 'api_keys.yaml' file, located at {api_key_path}")
             exit(1)
     openai.api_key = openai_api_key
