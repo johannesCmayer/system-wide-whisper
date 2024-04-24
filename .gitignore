@@ -7,3 +7,4 @@ audio/
 config_local.yaml
 locks/
 .venv/
+.direnv/
