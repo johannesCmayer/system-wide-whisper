@@ -25,17 +25,20 @@ def _X_get_window_name():
     return subprocess.check_output([r"""xprop -id $(xdotool getwindowfocus) | sed -n 's/WM_CLASS.*= "\([^"]*\).*/\1/p'"""], shell=True).decode().strip()
 
 def _X_paste_text(text):
+    logging.debug(f'Using X paste')
     clipboard_contents = _X_get_clipboard()
     #subprocess.run(['xdotool', 'type', text])
     program = _X_get_window_name()
     subprocess.run(['xclip', '-selection', 'primary'], input=text.encode(), check=True)
-    logging.info(f'program is: {program}')
+    logging.debug(f'program is: {program}')
     if program.lower() in ['emacs']:
         # Use Shift+Insert
+        logging.debug(f'X paste: Detected Emacs')
         subprocess.run(['xclip', '-selection', 'clipboard'], input=(text).encode(), check=True)
         subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'Shift+Insert'])
     elif program.lower() in [*terminal_names, 'obsidian', 'code']:
         # Use Shift+Ctrl+v
+        logging.debug(f'X paste: obsidian or VScode')
         subprocess.run(['xclip', '-selection', 'clipboard'], input=(text).encode(), check=True)
         subprocess.run(['xdotool', 'key', '--clearmodifiers', 'Shift+Ctrl+V'], check=True)
         time.sleep(1)
@@ -47,6 +50,7 @@ def _X_paste_text(text):
     subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents.encode(), check=True)
 
 def _pyperclip_paste_text(text):
+    logging.debug(f'Using Pyperclip')
     orig_clipboard = pyperclip.paste()
     pyperclip.copy(text)
     keyboard = Controller()
@@ -57,16 +61,20 @@ def _pyperclip_paste_text(text):
         pyperclip.copy(orig_clipboard)
 
 def paste_text(args, text, server_state):
-    """Paste the text into the current window, at the current cursor position.
-    This function selects the appropriate method for the current platform, and
-    Application."""
+    """
+    Paste text at cursor.
+    
+    Paste text into the currently selected window, at the current cursor position.
+    This function selects the appropriate method for the current platform, and Application.
+    """
+    logging.debug(f'Pasting Text')
     if args.no_insertion:
         return
     for i in server_state.thread_infos:
         logging.debug(f'In paste function server state thread info: {i.thread}')
         logging.debug(f'In paste function current thread: {threading.current_thread()}')
         if i.thread_state == ThreadState.ABORTION_REQUESTED and threading.current_thread() is i.thread:
-            logging.info(f'Processing abortion request, in paste function of thread {i}')
+            logging.debug(f'Processing abortion request, in paste function of thread {i}')
             i.thread_state = ThreadState.ABORTION_PROCESSED
             return
     if args.clipboard:

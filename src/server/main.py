@@ -12,6 +12,7 @@ import threading
 import time
 import traceback
 import wave
+import shutil
 from collections import namedtuple
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta
@@ -36,8 +37,6 @@ from popup import (Dzen2Popup, MacOSAlertPopup, TerminalNotifierPopup,
 from rich import print
 from rich.logging import RichHandler
 from text_processing import process_transcription
-
-logging.basicConfig(level=logging.DEBUG, format="%(message)s", datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
 network_command_parser = argparse.ArgumentParser(exit_on_error=False, add_help=False, prog="",
     description=f'The default config can be picewise overwritten by a config_local.yaml '
@@ -97,7 +96,8 @@ network_command_parser.add_argument('--working-dir', type=Path, required=True,
 cli_parser = argparse.ArgumentParser(
     description='This is the CLI for the system-wide-whisper server. The client CLI is separate, '
                 'and can be viewed with --help-client with the server prgram, or from the client.')
-cli_parser.add_argument('--debug-mode', action='store_true', 
+cli_parser.add_argument('--debug-log', action='store_true', help='Set logging to debug.')
+cli_parser.add_argument('--use-debug-port', action='store_true', 
                         help='Run the server in a terminal instead of as a service, '
                         'in a way that also allows to run the service in the background. '
                         'This works by using a different port. Use debug-client to connect '
@@ -105,6 +105,10 @@ cli_parser.add_argument('--debug-mode', action='store_true',
 cli_parser.add_argument('--help-client', action='store_true', 
                         help='Show the help message for the client.')
 cli_args = cli_parser.parse_args()
+
+logging.basicConfig(
+    level=logging.DEBUG if cli_args.debug_log else logging.INFO, 
+    format="%(message)s", datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
 if cli_args.help_client:
     network_command_parser.print_help()
@@ -211,7 +215,7 @@ def record() -> str:
                         input=True,
                         start=False)
 
-    logging.info('Recording')
+    logging.debug('Recording')
     n1 = push_notification("Recording for Whisper", "Recording for Whisper", record_icon)
 
     # Record audio
@@ -243,13 +247,13 @@ def record() -> str:
 
     stop_signal_file.unlink(missing_ok=True)
 
-    logging.info('Finished recording')
+    logging.debug('Completed Audio Capture')
 
     # Save the recorded data as a WAV file
     mp3_path = f"{audio_path}/{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.mp3"
     with tempfile.TemporaryDirectory() as tmp_dir:
         wav_path = f"{tmp_dir}/temp.wav"
-        logging.info('saving wav')
+        logging.debug('saving wav')
         wf = wave.open(wav_path, 'wb')
         wf.setnchannels(channels)
         wf.setsampwidth(p.get_sample_size(sample_format))
@@ -258,11 +262,11 @@ def record() -> str:
         wf.close()
 
         # Convert WAV to mp3
-        logging.info('saving mp3')
+        logging.debug('saving mp3')
         data, fs = sf.read(wav_path) 
         sf.write(mp3_path, data, fs)
 
-    logging.info(mp3_path)
+    logging.info(f"Finished Recording {Path(mp3_path).name}")
 
     if abort_signal_file.exists():
         abort_signal_file.unlink(missing_ok=True)
@@ -275,7 +279,8 @@ def transcribe(args, mp3_path):
     n2 = push_notification("Processing", "Processing", icon=processing_icon)
     out = openai_transcibe(mp3_path)
     out = process_transcription(args, out)
-    logging.info(f"transcription: {out}")
+    logging.info(f"transcription:")
+    print(out)
 
     with transcription_file.open('a') as f:
         f.write('\n')
@@ -358,29 +363,30 @@ def generate_mp3s(input_file: Path, output_dir: Path) -> Path:
     return Path(output_dir)
 
 def argument_branching(network_args, server_state: ServerState, conn):
-    """Handle the network arguments and execute the appropriate functionality. """
+    """Handle the network arguments and execute the appropriate functionality."""
     if network_args.abort:
-        logging.info('abort')
+        logging.debug('Received abort command.')
         speak(network_args, 'abort')
         abort_signal_file.touch()
         server_state.recording_started = False
         for s in server_state.thread_infos:
             s.thread_state = ThreadState.ABORTION_REQUESTED
-        logging.debug("Set all thread states to ABORTION_REQUESTED")
+        logging.debug("Set all thread states to ABORTION_REQUESTED.")
     elif network_args.toggle_recording:
-        logging.info('toggle recording')
+        logging.info('Received toggle recording command.')
         if server_state.recording_started:
-            logging.debug("toggle: Stopping recording")
+            logging.debug("toggle: Stopping recording.")
             stop_signal_file.touch()
             running_signal_file.unlink(missing_ok=True)
             speak(network_args, 'Stop')
             server_state.recording_started = False
         else:
-            logging.debug("toggle: Starting recording")
+            logging.debug("toggle: Starting recording.")
             running_signal_file.touch()
             server_state.recording_started = True
             asr_pipeline(network_args, server_state)
     elif network_args.toggle_pause:
+        logging.info('Received pause recording command.')
         if pause_signal_file.exists():
             pause_signal_file.unlink()
             speak(network_args, 'Unpause')
@@ -388,17 +394,21 @@ def argument_branching(network_args, server_state: ServerState, conn):
             pause_signal_file.touch()
             speak(network_args, 'Pause')
     elif network_args.shutdown:
+        logging.info('Received shutdown command.')
         sys.exit(0)
     elif network_args.list_transcriptions:
+        logging.info('Received list transcriptions command.')
         with transcription_file.open() as f:
             lines = f.readlines()
         for line in lines:
             logging.info(f"{line}\n" )
         conn.sendall(''.join(lines).encode())
     elif network_args.transcribe_last:
+        logging.info('Received transcribe last command.')
         transcription_target = sorted(audio_path.glob('*.mp3'))[-1]
         transcribe_wrapper(network_args, server_state, transcription_target)
     elif network_args.list_recordings:
+        logging.info('Received list recordings command.')
         msg = ''
         for p in sorted(audio_path.glob('*.mp3')):
             duration = timedelta(seconds=int(sf.info(p).duration))
@@ -406,12 +416,14 @@ def argument_branching(network_args, server_state: ServerState, conn):
         logging.info(msg)
         conn.sendall(msg.encode())
     elif network_args.status:
+        logging.info('Received network status command.')
         msg = (f"Sever is running\n"
             f"Uptime: {time.time() - program_start_time}s\n"
             f"Active Threads: {threading.active_count()}\n")
         logging.info(msg)
         conn.sendall(msg.encode())
     elif network_args.transcribe_file:
+        logging.info('Received transcribe file command.')
         transcription_target = resolve_file(network_args, network_args.transcribe_file)
         logging.info(f"transcription_target: {transcription_target=}")
         text = ""
@@ -425,15 +437,17 @@ def argument_branching(network_args, server_state: ServerState, conn):
         conn.sendall(text.encode())
 
     elif network_args.test_error:
+        logging.info('Received test error command.')
         raise Exception('Test Error')
     else:
+        logging.info('Invalid command. Sending help.')
         send_help(conn)
 
 def connection_processor(conn, server_state):
     with conn:
         msg = conn.recv(1024)
         msg = msg.decode('utf-8').strip()
-        logging.info(f'Got message: {msg}')
+        logging.debug(f'Got message: {msg}')
 
         network_args = shlex.split(msg)
 
@@ -472,14 +486,15 @@ def connection_acceptor():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
-        port = config['debug_port'] if cli_args.debug_mode else config['port']
+        port = config['debug_port'] if cli_args.use_debug_port else config['port']
         s.bind((config['IP'], port))
         s.listen(5)
+        logging.info("Server Ready")
         while True:
-            logging.info('Waiting for connection')
+            logging.debug('Waiting for connection')
             conn, addr = s.accept()
             server_state.thread_infos = [t for t in server_state.thread_infos if t.thread.is_alive()]
-            logging.info(f'Got connection from {addr}')
+            logging.debug(f'Processing connection from {addr}')
             t = threading.Thread(target=connection_processor, args=[conn, server_state])
             thread_info = ThreadInfo(t, ThreadState.RUNNING)
             server_state.thread_infos.append(thread_info)
@@ -491,18 +506,15 @@ def connection_acceptor():
         logging.debug('closing socket')
         s.close()
 
-class Box:
-    def __init__(self, val):
-        self.val = val
-
-    def get(self):
-        return self.val
-
 @atexit.register
 def cleanup():
     instance_lock_path.unlink(missing_ok=True)
 
 if __name__ == '__main__':
+    # Cleanup any potential remaining locks.
+    for file in lock_path.glob('*'):
+        file.unlink()
+
     try:
         connection_acceptor()
     except Exception as e:
