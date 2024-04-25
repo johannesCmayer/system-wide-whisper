@@ -51,7 +51,14 @@ def _X_paste_text(text):
 
 def _pyperclip_paste_text(text):
     logging.debug(f'Using Pyperclip')
-    orig_clipboard = pyperclip.paste()
+    orig_clipboard = None
+    try:
+        orig_clipboard = pyperclip.paste()
+    except UnicodeDecodeError as e:
+        logging.warning(
+            "Could not save currint clipboard. It will not be restored. Most likely "
+            "because it contained binary data.")
+
     pyperclip.copy(text)
     keyboard = Controller()
     with keyboard.pressed(Key.cmd if sys.platform == "darwin" else Key.ctrl):
@@ -79,7 +86,7 @@ def paste_text(args, text, server_state):
             return
     if args.clipboard:
         pyperclip.copy(text)
-    elif sys.platform == 'linux':
-        _X_paste_text(text)
+    # elif sys.platform == 'linux':
+    #     _X_paste_text(text)
     else:
         _pyperclip_paste_text(text)
