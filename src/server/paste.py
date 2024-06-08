@@ -31,7 +31,7 @@ def _X_paste_text(text):
     program = _X_get_window_name()
     subprocess.run(['xclip', '-selection', 'primary'], input=text.encode(), check=True)
     logging.debug(f'program is: {program}')
-    if program.lower() in ['emacs']:
+    if program.lower() in ['emacs', 'kitty']:
         # Use Shift+Insert
         logging.debug(f'X paste: Detected Emacs')
         subprocess.run(['xclip', '-selection', 'clipboard'], input=(text).encode(), check=True)
@@ -86,7 +86,7 @@ def paste_text(args, text, server_state):
             return
     if args.clipboard:
         pyperclip.copy(text)
-    # elif sys.platform == 'linux':
-    #     _X_paste_text(text)
+    elif sys.platform == 'linux':
+        _X_paste_text(text)
     else:
         _pyperclip_paste_text(text)
