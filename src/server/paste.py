@@ -31,23 +31,29 @@ def _X_paste_text(text):
     program = _X_get_window_name()
     subprocess.run(['xclip', '-selection', 'primary'], input=text.encode(), check=True)
     logging.debug(f'program is: {program}')
-    if program.lower() in ['emacs', 'kitty']:
+    if program.lower() in ['emacs', 'kitty', 'obsidian']:
         # Use Shift+Insert
         logging.debug(f'X paste: Detected Emacs')
         subprocess.run(['xclip', '-selection', 'clipboard'], input=(text).encode(), check=True)
         subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'Shift+Insert'])
-    elif program.lower() in [*terminal_names, 'obsidian', 'code']:
-        # Use Shift+Ctrl+v
-        logging.debug(f'X paste: obsidian or VScode')
-        subprocess.run(['xclip', '-selection', 'clipboard'], input=(text).encode(), check=True)
-        subprocess.run(['xdotool', 'key', '--clearmodifiers', 'Shift+Ctrl+V'], check=True)
-        time.sleep(1)
-    else:
-        # Use Ctrl+v
-        subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode(), check=True)
-        subprocess.run(['xdotool', 'key', '--clearmodifiers', 'Ctrl+v'], check=True)
         time.sleep(0.25)
-    subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents.encode(), check=True)
+        subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents.encode(), check=True)
+        return
+    elif program.lower() in [*terminal_names, 'code']:
+        _pyperclip_paste_text(text)
+        ## Use Shift+Ctrl+v
+        #logging.debug(f'X paste: obsidian or VScode')
+        #subprocess.run(['xclip', '-selection', 'clipboard'], input=(text).encode(), check=True)
+        #subprocess.run(['xdotool', 'key', '--clearmodifiers', 'Shift+Ctrl+V'], check=True)
+        #time.sleep(1)
+        # subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents.encode(), check=True)
+    else:
+        _pyperclip_paste_text(text)
+        # Use Ctrl+v
+        # subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode(), check=True)
+        # subprocess.run(['xdotool', 'key', '--clearmodifiers', 'Ctrl+v'], check=True)
+        # time.sleep(0.25)
+        # subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents.encode(), check=True)
 
 def _pyperclip_paste_text(text):
     logging.debug(f'Using Pyperclip')
