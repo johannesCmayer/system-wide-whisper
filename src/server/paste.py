@@ -36,7 +36,7 @@ def _X_paste_text(text):
         logging.debug(f'X paste: Detected Emacs')
         subprocess.run(['xclip', '-selection', 'clipboard'], input=(text).encode(), check=True)
         subprocess.check_output(['xdotool', 'key', '--clearmodifiers', 'Shift+Insert'])
-        time.sleep(0.25)
+        time.sleep(config['paste_wait'])
         subprocess.run(['xclip', '-selection', 'clipboard'], input=clipboard_contents.encode(), check=True)
         return
     elif program.lower() in [*terminal_names, 'code']:
