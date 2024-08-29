@@ -1,5 +1,5 @@
 {
-  description = "A Nix-flake-based Python development environment";
+  description = "Use whisper in any application to dictate text.";
 
   # We need 23.11 to get a 0.28 open-ai python API package.
   inputs.nixpkgs.url = "nixpkgs/nixos-23.11";
