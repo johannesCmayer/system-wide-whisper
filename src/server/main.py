@@ -33,7 +33,7 @@ from data_structures import ServerState, ThreadInfo, ThreadState
 from desktop_notifier import DesktopNotifier, Urgency
 from paste import paste_text
 from popup import (Dzen2Popup, MacOSAlertPopup, TerminalNotifierPopup,
-                   TkinterPopup)
+                   TkinterPopup, NoPopup)
 from rich import print
 from rich.logging import RichHandler
 from text_processing import process_transcription
@@ -77,6 +77,8 @@ network_command_parser.add_argument('--only-record', action='store_true',
     help="Only record, don't transcribe.")
 network_command_parser.add_argument('--clipboard', action='store_true', 
     help="Don't paste, only copy to clipboard.")
+network_command_parser.add_argument('--std-out', action='store_true', 
+    help="Don't paste, only output to stdout.")
 network_command_parser.add_argument('--no-insertion', action='store_true', 
     help="Transcribe but don't paste or copy to clipboard")
 network_command_parser.add_argument('--config', action='store_true', 
@@ -92,6 +94,8 @@ network_command_parser.add_argument('--test-error', action='store_true',
     help="Raise an error in the network argument branching section for testing purposes.")
 network_command_parser.add_argument('--working-dir', type=Path, required=True,
     help='The working directory to use for file operations. This would normally be set automatically be the client.')
+network_command_parser.add_argument('--notifier-system', type=str, required=False,
+    help='The notification system to use. Setting this overwrites the config file value.')
 
 cli_parser = argparse.ArgumentParser(
     description='This is the CLI for the system-wide-whisper server. The client CLI is separate, '
@@ -155,23 +159,26 @@ def openai_transcibe(mp3_path):
     out = openai.Audio.transcribe(config['model'], open(mp3_path, "rb"), language=config['input_language'])
     return out.text # type: ignore
 
-def push_notification(title, message, icon):
+def push_notification(title, message, icon, network_args):
     """Push a persistent notification to the user, which stays until it is programmatically cleared.
     @return: a notification object with which can be cleared with clear_notification"""
-    if config['notifier_system'] == 'terminal-notifier':
+    notifier_system = network_args.notifier_system if network_args.notifier_system else config['notifier_system']
+    if notifier_system == 'terminal-notifier':
         n = TerminalNotifierPopup(title=title, description=message, icon=icon)
         n.display()
         return n
-    elif config['notifier_system'] == 'tkinter':
+    elif notifier_system == 'tkinter':
         return TkinterPopup("Recording for Whisper", "Recording for Whisper", 100, 100, 100, 100, icon)
-    elif config['notifier_system'] == 'dzen2popup':
+    elif notifier_system == 'dzen2popup':
         n = Dzen2Popup(title=title, description=message)
         n.display()
         return n
-    elif config['notifier_system'] == 'macos-alert':
+    elif notifier_system == 'macos-alert':
         x = MacOSAlertPopup(title=title, description=message)
         x.display()
         return x
+    elif notifier_system == 'no-popup':
+        return NoPopup()
     else:
         raise Exception('Notifier system not supported')
 
@@ -180,7 +187,7 @@ def clear_notification(notification):
     logging.debug(f"Clearing notification: {notification}")
     notification.clear()
 
-def record() -> str:
+def record(network_args) -> str:
     """Record audio and save it to an mp3 file.
     @return: path to the mp3 file"""
     stop_signal_file.unlink(missing_ok=True)
@@ -216,7 +223,7 @@ def record() -> str:
                         start=False)
 
     logging.debug('Recording')
-    n1 = push_notification("Recording for Whisper", "Recording for Whisper", record_icon)
+    n1 = push_notification("Recording for Whisper", "Recording for Whisper", record_icon, network_args)
 
     # Record audio
     frames = []  # Initialize array to store frames
@@ -229,7 +236,7 @@ def record() -> str:
             if not pause_signal_file.exists():
                 frames.append(data)
                 if n1 is None:
-                    n1 = push_notification("Recording for Whisper", "Recording for Whisper", record_icon)
+                    n1 = push_notification("Recording for Whisper", "Recording for Whisper", record_icon, network_args)
                 if n_pause:
                     clear_notification(n_pause)
                     n_pause = None
@@ -237,7 +244,7 @@ def record() -> str:
                 if not n_pause:
                     clear_notification(n1)
                     n1 = None
-                    n_pause = push_notification("Paused Recording", "Paused Recording", pause_icon)
+                    n_pause = push_notification("Paused Recording", "Paused Recording", pause_icon, network_args)
     stream.stop_stream()
 
     if n_pause:
@@ -275,10 +282,10 @@ def record() -> str:
 
     return mp3_path
 
-def transcribe(args, mp3_path):
-    n2 = push_notification("Processing", "Processing", icon=processing_icon)
+def transcribe(network_args, mp3_path):
+    n2 = push_notification("Processing", "Processing", processing_icon, network_args)
     out = openai_transcibe(mp3_path)
-    out = process_transcription(args, out)
+    out = process_transcription(network_args, out)
     logging.info(f"transcription:")
     print(out)
 
@@ -301,12 +308,15 @@ def aquire_lock():
                 locks.remove(l)
         time.sleep(0.1)
 
-def asr_pipeline(args, server_state):
-    mp3_path = record()
-    text = transcribe(args, mp3_path)
-    aquire_lock()
-    paste_text(args, text, server_state)
-    instance_lock_path.unlink(missing_ok=True)
+def asr_pipeline(network_args, server_state):
+    mp3_path = record(network_args)
+    text = transcribe(network_args, mp3_path)
+    if network_args.std_out:
+        return(text)
+    else:
+        aquire_lock()
+        paste_text(network_args, text, server_state)
+        instance_lock_path.unlink(missing_ok=True)
 
 def trim_audio_files():
     audio_paths = sorted(audio_path.glob('*.mp3'))
@@ -321,11 +331,14 @@ def speak(args, text):
         global speak_proc
         speak_proc = subprocess.Popen(['gsay', text])
 
-def transcribe_wrapper(args, server_state, mp3_path, delete_file=False):
-    text = transcribe(args, mp3_path)
-    paste_text(args, text, server_state)
+def transcribe_wrapper(network_args, server_state, mp3_path, delete_file=False):
+    text = transcribe(network_args, mp3_path)
     if delete_file:
         mp3_path.unlink()
+    if network_network_args.std_out:
+        return(text)
+    else:
+        paste_text(network_args, text, server_state)
 
 def send_help(conn: socket.socket):
     help = network_command_parser.format_help()
@@ -384,7 +397,9 @@ def argument_branching(network_args, server_state: ServerState, conn):
             logging.debug("toggle: Starting recording.")
             running_signal_file.touch()
             server_state.recording_started = True
-            asr_pipeline(network_args, server_state)
+            text = asr_pipeline(network_args, server_state)
+            if text:
+                conn.sendall(text.encode())
     elif network_args.toggle_pause:
         logging.info('Received pause recording command.')
         if pause_signal_file.exists():
@@ -406,7 +421,9 @@ def argument_branching(network_args, server_state: ServerState, conn):
     elif network_args.transcribe_last:
         logging.info('Received transcribe last command.')
         transcription_target = sorted(audio_path.glob('*.mp3'))[-1]
-        transcribe_wrapper(network_args, server_state, transcription_target)
+        text = transcribe_wrapper(network_args, server_state, transcription_target)
+        if text:
+            conn.sendall(text.encode())
     elif network_args.list_recordings:
         logging.info('Received list recordings command.')
         msg = ''
@@ -434,7 +451,8 @@ def argument_branching(network_args, server_state: ServerState, conn):
                 if abort_signal_file.exists():
                     break
                 transcribe(network_args, f)
-        conn.sendall(text.encode())
+        if text:
+            conn.sendall(text.encode())
 
     elif network_args.test_error:
         logging.info('Received test error command.')

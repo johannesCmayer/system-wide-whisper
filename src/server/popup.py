@@ -44,6 +44,15 @@ class Dzen2Popup:
         for proc in self.procs:
             proc.kill()
 
+class NoPopup:
+    def __init__(self):
+        pass
+
+    def display(self):
+        pass
+
+    def clear(self):
+        pass
 
 class TerminalNotifierPopup:
     def __init__(self, title, description, icon):

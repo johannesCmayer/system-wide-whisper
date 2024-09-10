@@ -1,2 +1,2 @@
 #!/bin/sh
-printf "\"%s\" " --working-dir "$(pwd)" "$@" | nc localhost 29349
+printf "\"%s\" " --working-dir "$(pwd)" "$@" | nc "localhost" 29349
